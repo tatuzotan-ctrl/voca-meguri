@@ -30,6 +30,7 @@ export default function Home() {
   const formatDate = (dateString: string) => dateString?.replace(/-/g, '/') || ''
 
   const fetchData = async () => {
+    // 💡 プロモーション取得時に、イベントの終了日も一緒に持ってくる
     const { data: promoList } = await supabase
       .from('promotions')
       .select(`
@@ -117,17 +118,23 @@ export default function Home() {
     finally { setIsSubmitting(false) }
   }
 
-  // --- 💡 30日経過チェックロジック ---
+  // --- 💡 運用ロジック部分 ---
   const now = new Date()
+
+  // 1. 登録フォーム用：終了から3日以内なら選択肢に出す
+  const selectableEvents = activeEvents.filter(e => {
+    const limitForSelect = new Date(e.end_date)
+    limitForSelect.setDate(limitForSelect.getDate() + 3)
+    return limitForSelect > now
+  })
+
+  // 2. 表示カード用：終了から30日以内なら画面に出す
   const filteredPromos = promotions.filter(p => {
     const endDateStr = (p as any).active_events?.end_date
-    if (!endDateStr) return true // 終了日がなければ表示
-    
-    const endDate = new Date(endDateStr)
-    const limitDate = new Date(endDate)
-    limitDate.setDate(limitDate.getDate() + 30) // 終了日 + 30日
-    
-    return limitDate > now // 期限が現在より先なら表示
+    if (!endDateStr) return true 
+    const limitForDisplay = new Date(endDateStr)
+    limitForDisplay.setDate(limitForDisplay.getDate() + 30)
+    return limitForDisplay > now
   })
 
   const displayedPromos = view === 'mine' 
@@ -173,7 +180,8 @@ export default function Home() {
               <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
                 <select value={eventId} onChange={(e) => setEventId(e.target.value)} style={{ padding: '12px', borderRadius: '10px', border: '1px solid #ddd', fontSize: '14px' }}>
                   <option value="">対象の祭を選択...</option>
-                  {activeEvents.map(e => <option key={e.id} value={e.id}>{e.event_name} ({formatDate(e.start_date)}〜)</option>)}
+                  {/* 💡 selectableEvents を使用 */}
+                  {selectableEvents.map(e => <option key={e.id} value={e.id}>{e.event_name} ({formatDate(e.start_date)}〜)</option>)}
                 </select>
                 <input type="text" placeholder="曲名 (必須)" value={songTitle} onChange={(e) => setSongTitle(e.target.value)} style={{ padding: '12px', borderRadius: '10px', border: '1px solid #ddd', fontSize: '14px' }} />
                 <input type="text" placeholder="名前 (必須)" value={creatorName} onChange={(e) => setCreatorName(e.target.value)} style={{ padding: '12px', borderRadius: '10px', border: '1px solid #ddd', fontSize: '14px' }} />
@@ -260,17 +268,10 @@ export default function Home() {
           </div>
         </main>
       ) : (
+        // ... (ログイン画面は変更なし) ...
         <div style={{ textAlign: 'center', marginTop: '100px', padding: '0 20px' }}>
           <h2 style={{ fontSize: '2.5rem', marginBottom: '10px', color: '#0070f3', fontWeight: '900' }}>巡ログ <span style={{fontSize: '1rem'}}>β</span></h2>
           <p style={{ color: '#666', marginBottom: '40px' }}>作品との出会いを記録する、巡回ログツール</p>
-          
-          <div style={{ backgroundColor: '#fff', border: '1px solid #eee', padding: '20px', borderRadius: '20px', fontSize: '12px', color: '#888', textAlign: 'left', maxWidth: '400px', margin: '0 auto 40px auto', lineHeight: '1.6', boxShadow: '0 4px 12px rgba(0,0,0,0.02)' }}>
-            <strong style={{ display: 'block', marginBottom: '8px', color: '#444', fontSize: '13px' }}>⚠️ 使用上の注意</strong>
-            ・本ツールはβ版につき、データの永続性は保証されません。<br />
-            ・メンテナンスや不具合によりデータが消失しても、管理者は責任を負いかねます。<br />
-            ・個人開発のツールであることをご理解の上、ご利用ください。
-          </div>
-
           <button onClick={() => supabase.auth.signInWithOAuth({ provider: 'x' })} style={{ padding: '20px 50px', backgroundColor: '#000', color: 'white', border: 'none', borderRadius: '40px', fontWeight: 'bold', cursor: 'pointer', fontSize: '18px', boxShadow: '0 10px 30px rgba(0,0,0,0.2)' }}>
             Xアカウントでログイン
           </button>
