@@ -30,10 +30,22 @@ export default function Home() {
   const formatDate = (dateString: string) => dateString?.replace(/-/g, '/') || ''
 
   const fetchData = async () => {
-    const { data: promoList } = await supabase.from('promotions').select('*').order('created_at', { ascending: false })
+    // 💡 promotionsを取得する際、active_eventsテーブルからevent_nameを結合して取得
+    const { data: promoList } = await supabase
+      .from('promotions')
+      .select(`
+        *,
+        active_events (
+          event_name
+        )
+      `)
+      .order('created_at', { ascending: false })
+    
     setPromotions(promoList || [])
+
     const { data: myLists } = await supabase.from('my_lists').select('*')
     setMyListData(myLists || [])
+
     const { data: events } = await supabase.from('active_events').select('*')
     setActiveEvents(events || [])
   }
@@ -49,10 +61,8 @@ export default function Home() {
     init()
   }, [])
 
-  // --- 💡 ログアウト機能を確実に！ ---
   const handleLogout = async () => {
     await supabase.auth.signOut()
-    // ログアウト後はセッションをクリアするためにリロード
     window.location.reload()
   }
 
@@ -193,6 +203,8 @@ export default function Home() {
               const myListItem = myListData.find(m => m.promotion_id === p.id)
               const isInMyList = !!myListItem
               const isWatched = myListItem?.is_watched || false
+              // 💡 紐付いたイベント名を取得
+              const eventName = (p as any).active_events?.event_name || '不明なイベント'
 
               return (
                 <div key={p.id} style={{ display: 'flex', gap: '15px', padding: '15px', backgroundColor: isWatched ? '#f9f9f9' : '#fff', borderRadius: '18px', border: '1px solid #eee', opacity: isWatched ? 0.7 : 1 }}>
@@ -202,7 +214,11 @@ export default function Home() {
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'start' }}>
                       <div style={{ minWidth: 0 }}>
-                        <h3 style={{ margin: '0 0 4px 0', fontSize: '14px', fontWeight: 'bold', color: '#0070f3', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{p.song_title || '作品名なし'}</h3>
+                        {/* 💡 イベント名を表示 */}
+                        <div style={{ fontSize: '10px', backgroundColor: '#eef4ff', color: '#0070f3', padding: '2px 8px', borderRadius: '4px', display: 'inline-block', marginBottom: '4px', fontWeight: 'bold' }}>
+                          {eventName}
+                        </div>
+                        <h3 style={{ margin: '0 0 4px 0', fontSize: '14px', fontWeight: 'bold', color: '#333', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{p.song_title || '作品名なし'}</h3>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                           <img src={p.creator_icon_url || DEFAULT_ICON} style={{ width: '20px', height: '20px', borderRadius: '4px', objectFit: 'cover' }} />
                           <span style={{ fontSize: '12px', color: '#666', fontWeight: '500' }}>{p.creator_name}</span>
