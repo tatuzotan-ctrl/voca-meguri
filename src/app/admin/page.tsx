@@ -39,7 +39,7 @@ export default function AdminPage() {
     checkUser()
   }, [])
 
-  // 💡 型の取り消し線を消すために React.BaseSyntheticEvent を使用
+  // 💡 取り消し線が出ない安定した型定義
   const handleSubmit = async (e: React.BaseSyntheticEvent) => {
     e.preventDefault()
     const payload: any = { event_name: name, start_date: start, end_date: end }
@@ -55,13 +55,14 @@ export default function AdminPage() {
     fetchEvents()
   }
 
-  const toggleActive = async (id: number, currentStatus: boolean) => {
-    await supabase.from('active_events').update({ is_active: !currentStatus }).eq('id', id)
+  // 💡 指定したステータスに直接書き換える関数
+  const setStatus = async (id: number, targetStatus: boolean) => {
+    await supabase.from('active_events').update({ is_active: targetStatus }).eq('id', id)
     fetchEvents()
   }
 
   const deleteEvent = async (id: number) => {
-    if (!confirm('本当に削除しますか？')) return
+    if (!confirm('本当に削除しますか？紐づく投稿に影響が出る可能性があります')) return
     await supabase.from('active_events').delete().eq('id', id)
     fetchEvents()
   }
@@ -114,34 +115,41 @@ export default function AdminPage() {
         <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: '600px' }}>
           <thead>
             <tr style={{ borderBottom: '2px solid #eee', textAlign: 'left', fontSize: '14px', color: '#888' }}>
-              <th style={{ padding: '15px 10px' }}>状態</th>
+              <th style={{ padding: '15px 10px' }}>公開設定</th>
               <th style={{ padding: '15px 10px' }}>イベント名</th>
               <th style={{ padding: '15px 10px' }}>開催期間</th>
-              <th style={{ padding: '15px 10px' }}>アクション</th>
+              <th style={{ padding: '15px 10px' }}>操作</th>
             </tr>
           </thead>
           <tbody>
             {events.map(e => (
               <tr key={e.id} style={{ borderBottom: '1px solid #f5f5f5', backgroundColor: e.is_active ? 'transparent' : '#fafafa' }}>
                 <td style={{ padding: '15px 10px' }}>
-                  <button 
-                    onClick={() => toggleActive(e.id, e.is_active)} 
-                    style={{ 
-                      backgroundColor: e.is_active ? '#4caf50' : '#888', 
-                      color: 'white', 
-                      border: 'none', 
-                      padding: '6px 12px', 
-                      borderRadius: '8px', 
-                      cursor: 'pointer', 
-                      fontSize: '12px',
-                      fontWeight: 'bold',
-                      minWidth: '80px',
-                      transition: 'all 0.2s'
-                    }}
-                  >
-                    {/* 💡 ここがポイント：is_activeの状態を見て文字を出し分ける */}
-                    {e.is_active ? '公開中' : '非表示'}
-                  </button>
+                  {/* 💡 セグメントスイッチ方式のUI */}
+                  <div style={{ display: 'flex', backgroundColor: '#eee', borderRadius: '10px', padding: '3px', width: 'fit-content', border: '1px solid #ddd' }}>
+                    <button 
+                      onClick={() => !e.is_active && setStatus(e.id, true)} 
+                      style={{ 
+                        padding: '6px 15px', borderRadius: '7px', border: 'none', fontSize: '12px', fontWeight: 'bold', cursor: 'pointer',
+                        backgroundColor: e.is_active ? '#4caf50' : 'transparent', 
+                        color: e.is_active ? 'white' : '#888',
+                        transition: 'all 0.2s'
+                      }}
+                    >
+                      公開
+                    </button>
+                    <button 
+                      onClick={() => e.is_active && setStatus(e.id, false)} 
+                      style={{ 
+                        padding: '6px 15px', borderRadius: '7px', border: 'none', fontSize: '12px', fontWeight: 'bold', cursor: 'pointer',
+                        backgroundColor: !e.is_active ? '#888' : 'transparent', 
+                        color: !e.is_active ? 'white' : '#888',
+                        transition: 'all 0.2s'
+                      }}
+                    >
+                      非表示
+                    </button>
+                  </div>
                 </td>
                 <td style={{ padding: '15px 10px', fontWeight: 'bold', color: e.is_active ? '#333' : '#999' }}>
                   {e.event_name}
