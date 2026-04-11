@@ -4,7 +4,7 @@ import { createBrowserClient } from '@supabase/ssr'
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
 
-// 💡 特定したマスターの UUID をここに貼り付けてください
+// 💡 ここにマスターの UUID を貼り付けてください
 const ADMIN_USER_ID = "9e756117-fd65-48f9-b6e4-ee1546950dce" 
 
 export default function AdminPage() {
@@ -12,7 +12,6 @@ export default function AdminPage() {
   const [loading, setLoading] = useState(true)
   const [events, setEvents] = useState<any[]>([])
   
-  // フォーム用
   const [name, setName] = useState('')
   const [start, setStart] = useState('')
   const [end, setEnd] = useState('')
@@ -40,9 +39,9 @@ export default function AdminPage() {
     checkUser()
   }, [])
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  // 💡 型の取り消し線を消すために React.BaseSyntheticEvent を使用
+  const handleSubmit = async (e: React.BaseSyntheticEvent) => {
     e.preventDefault()
-    // 💡 新規登録時は is_active: true 固定、編集時は今の状態を維持
     const payload: any = { event_name: name, start_date: start, end_date: end }
     if (!editingId) payload.is_active = true
     
@@ -56,14 +55,13 @@ export default function AdminPage() {
     fetchEvents()
   }
 
-  // 💡 公開中 ⇄ 非表示 を切り替えるトグル関数
   const toggleActive = async (id: number, currentStatus: boolean) => {
     await supabase.from('active_events').update({ is_active: !currentStatus }).eq('id', id)
     fetchEvents()
   }
 
   const deleteEvent = async (id: number) => {
-    if (!confirm('本当に削除しますか？紐づく投稿がエラーになる可能性があります')) return
+    if (!confirm('本当に削除しますか？')) return
     await supabase.from('active_events').delete().eq('id', id)
     fetchEvents()
   }
@@ -74,7 +72,7 @@ export default function AdminPage() {
     return (
       <div style={{ padding: '100px', textAlign: 'center' }}>
         <h1>403 Forbidden</h1>
-        <p>ここは管理者専用エリアです。ガブッとしないでね🦖</p>
+        <p>ここは管理者専用エリアです。ガブッとしないでね🐱</p>
         <Link href="/">トップへ戻る</Link>
       </div>
     )
@@ -87,7 +85,6 @@ export default function AdminPage() {
         <Link href="/" style={{ fontSize: '14px', color: '#0070f3', textDecoration: 'none', fontWeight: 'bold' }}>← トップに戻る</Link>
       </div>
 
-      {/* 入力エリア */}
       <section style={{ backgroundColor: '#f0f7ff', padding: '25px', borderRadius: '20px', marginBottom: '40px', boxShadow: '0 4px 15px rgba(0,112,243,0.05)' }}>
         <h2 style={{ fontSize: '1.1rem', marginTop: 0, marginBottom: '20px', color: '#0070f3' }}>
           {editingId ? '📝 イベント情報を編集' : '✨ 新規イベントを登録'}
@@ -107,13 +104,12 @@ export default function AdminPage() {
           </button>
           {editingId && (
             <button onClick={() => {setEditingId(null); setName(''); setStart(''); setEnd('')}} style={{ flex: '1 1 100%', background: 'none', border: 'none', color: '#666', cursor: 'pointer', fontSize: '14px' }}>
-              キャンセルして新規登録に戻る
+              キャンセル
             </button>
           )}
         </form>
       </section>
 
-      {/* 一覧エリア */}
       <div style={{ overflowX: 'auto' }}>
         <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: '600px' }}>
           <thead>
@@ -139,10 +135,11 @@ export default function AdminPage() {
                       cursor: 'pointer', 
                       fontSize: '12px',
                       fontWeight: 'bold',
-                      minWidth: '70px',
+                      minWidth: '80px',
                       transition: 'all 0.2s'
                     }}
                   >
+                    {/* 💡 ここがポイント：is_activeの状態を見て文字を出し分ける */}
                     {e.is_active ? '公開中' : '非表示'}
                   </button>
                 </td>
@@ -153,18 +150,8 @@ export default function AdminPage() {
                   {e.start_date.replace(/-/g, '/')} 〜 {e.end_date.replace(/-/g, '/')}
                 </td>
                 <td style={{ padding: '15px 10px', fontSize: '13px' }}>
-                  <button 
-                    onClick={() => {setEditingId(e.id); setName(e.event_name); setStart(e.start_date); setEnd(e.end_date)}} 
-                    style={{ background: 'none', border: 'none', color: '#0070f3', cursor: 'pointer', marginRight: '15px', fontWeight: 'bold' }}
-                  >
-                    編集
-                  </button>
-                  <button 
-                    onClick={() => deleteEvent(e.id)} 
-                    style={{ background: 'none', border: 'none', color: '#ff4d4f', cursor: 'pointer', fontWeight: 'bold' }}
-                  >
-                    削除
-                  </button>
+                  <button onClick={() => {setEditingId(e.id); setName(e.event_name); setStart(e.start_date); setEnd(e.end_date)}} style={{ background: 'none', border: 'none', color: '#0070f3', cursor: 'pointer', marginRight: '15px', fontWeight: 'bold' }}>編集</button>
+                  <button onClick={() => deleteEvent(e.id)} style={{ background: 'none', border: 'none', color: '#ff4d4f', cursor: 'pointer', fontWeight: 'bold' }}>削除</button>
                 </td>
               </tr>
             ))}
