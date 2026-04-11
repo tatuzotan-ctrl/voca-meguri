@@ -271,9 +271,29 @@ export default function Home() {
         <div style={{ textAlign: 'center', marginTop: '100px', padding: '0 20px' }}>
           <h2 style={{ fontSize: '2.5rem', marginBottom: '10px', color: '#0070f3', fontWeight: '900' }}>巡ログ <span style={{fontSize: '1rem'}}>β</span></h2>
           <p style={{ color: '#666', marginBottom: '40px' }}>作品との出会いを記録する、巡回ログツール</p>
-          <button onClick={() => supabase.auth.signInWithOAuth({ provider: 'x' })} style={{ padding: '20px 50px', backgroundColor: '#000', color: 'white', border: 'none', borderRadius: '40px', fontWeight: 'bold', cursor: 'pointer', fontSize: '18px', boxShadow: '0 10px 30px rgba(0,0,0,0.2)' }}>
-            Xアカウントでログイン
-          </button>
+<button 
+  onClick={() => supabase.auth.signInWithOAuth({ 
+    provider: 'x', // 💡 Provider名は 'twitter' のままが安定します
+    options: {
+      // 💡 ここで「メールアドレス」や「非公開情報」を要求リストから除外！
+      scopes: 'users.read tweet.read',
+      redirectTo: `${window.location.origin}/auth/callback`,
+    }
+  })} 
+  style={{ 
+    padding: '20px 50px', 
+    backgroundColor: '#000', 
+    color: 'white', 
+    border: 'none', 
+    borderRadius: '40px', 
+    fontWeight: 'bold', 
+    cursor: 'pointer', 
+    fontSize: '18px', 
+    boxShadow: '0 10px 30px rgba(0,0,0,0.2)' 
+  }}
+>
+  Xアカウントでログイン
+</button>
         </div>
       )}
       
