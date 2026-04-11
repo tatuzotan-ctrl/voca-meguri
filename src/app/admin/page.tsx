@@ -5,7 +5,7 @@ import { useEffect, useState } from 'react'
 import Link from 'next/link'
 
 // 💡 特定したマスターの UUID をここに貼り付けてください
-const ADMIN_USER_ID = "ここに自分のUUIDをペースト" 
+const ADMIN_USER_ID = "9e756117-fd65-48f9-b6e4-ee1546950dce" 
 
 export default function AdminPage() {
   const [user, setUser] = useState<any>(null)
