@@ -30,7 +30,6 @@ export default function Home() {
   const formatDate = (dateString: string) => dateString?.replace(/-/g, '/') || ''
 
   const fetchData = async () => {
-    // 💡 プロモーション取得時に、イベントの終了日も一緒に持ってくる
     const { data: promoList } = await supabase
       .from('promotions')
       .select(`
@@ -118,17 +117,14 @@ export default function Home() {
     finally { setIsSubmitting(false) }
   }
 
-  // --- 💡 運用ロジック部分 ---
   const now = new Date()
 
-  // 1. 登録フォーム用：終了から3日以内なら選択肢に出す
   const selectableEvents = activeEvents.filter(e => {
     const limitForSelect = new Date(e.end_date)
     limitForSelect.setDate(limitForSelect.getDate() + 3)
     return limitForSelect > now
   })
 
-  // 2. 表示カード用：終了から30日以内なら画面に出す
   const filteredPromos = promotions.filter(p => {
     const endDateStr = (p as any).active_events?.end_date
     if (!endDateStr) return true 
@@ -180,8 +176,12 @@ export default function Home() {
               <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
                 <select value={eventId} onChange={(e) => setEventId(e.target.value)} style={{ padding: '12px', borderRadius: '10px', border: '1px solid #ddd', fontSize: '14px' }}>
                   <option value="">対象の祭を選択...</option>
-                  {/* 💡 selectableEvents を使用 */}
-                  {selectableEvents.map(e => <option key={e.id} value={e.id}>{e.event_name} ({formatDate(e.start_date)}〜)</option>)}
+                  {/* 💡 期間（開始日 〜 終了日）を表示するように修正 */}
+                  {selectableEvents.map(e => (
+                    <option key={e.id} value={e.id}>
+                      {e.event_name} ({formatDate(e.start_date)} 〜 {formatDate(e.end_date)})
+                    </option>
+                  ))}
                 </select>
                 <input type="text" placeholder="曲名 (必須)" value={songTitle} onChange={(e) => setSongTitle(e.target.value)} style={{ padding: '12px', borderRadius: '10px', border: '1px solid #ddd', fontSize: '14px' }} />
                 <input type="text" placeholder="名前 (必須)" value={creatorName} onChange={(e) => setCreatorName(e.target.value)} style={{ padding: '12px', borderRadius: '10px', border: '1px solid #ddd', fontSize: '14px' }} />
@@ -268,7 +268,6 @@ export default function Home() {
           </div>
         </main>
       ) : (
-        // ... (ログイン画面は変更なし) ...
         <div style={{ textAlign: 'center', marginTop: '100px', padding: '0 20px' }}>
           <h2 style={{ fontSize: '2.5rem', marginBottom: '10px', color: '#0070f3', fontWeight: '900' }}>巡ログ <span style={{fontSize: '1rem'}}>β</span></h2>
           <p style={{ color: '#666', marginBottom: '40px' }}>作品との出会いを記録する、巡回ログツール</p>
