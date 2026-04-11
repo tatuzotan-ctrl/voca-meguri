@@ -30,13 +30,13 @@ export default function Home() {
   const formatDate = (dateString: string) => dateString?.replace(/-/g, '/') || ''
 
   const fetchData = async () => {
-    // 💡 promotionsを取得する際、active_eventsテーブルからevent_nameを結合して取得
     const { data: promoList } = await supabase
       .from('promotions')
       .select(`
         *,
         active_events (
-          event_name
+          event_name,
+          end_date
         )
       `)
       .order('created_at', { ascending: false })
@@ -117,9 +117,22 @@ export default function Home() {
     finally { setIsSubmitting(false) }
   }
 
+  // --- 💡 30日経過チェックロジック ---
+  const now = new Date()
+  const filteredPromos = promotions.filter(p => {
+    const endDateStr = (p as any).active_events?.end_date
+    if (!endDateStr) return true // 終了日がなければ表示
+    
+    const endDate = new Date(endDateStr)
+    const limitDate = new Date(endDate)
+    limitDate.setDate(limitDate.getDate() + 30) // 終了日 + 30日
+    
+    return limitDate > now // 期限が現在より先なら表示
+  })
+
   const displayedPromos = view === 'mine' 
-    ? promotions.filter(p => myListData.some(m => m.promotion_id === p.id))
-    : promotions
+    ? filteredPromos.filter(p => myListData.some(m => m.promotion_id === p.id))
+    : filteredPromos
 
   const totalInList = myListData.length
   const totalWatched = myListData.filter(m => m.is_watched).length
@@ -203,7 +216,6 @@ export default function Home() {
               const myListItem = myListData.find(m => m.promotion_id === p.id)
               const isInMyList = !!myListItem
               const isWatched = myListItem?.is_watched || false
-              // 💡 紐付いたイベント名を取得
               const eventName = (p as any).active_events?.event_name || '不明なイベント'
 
               return (
@@ -214,7 +226,6 @@ export default function Home() {
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'start' }}>
                       <div style={{ minWidth: 0 }}>
-                        {/* 💡 イベント名を表示 */}
                         <div style={{ fontSize: '10px', backgroundColor: '#eef4ff', color: '#0070f3', padding: '2px 8px', borderRadius: '4px', display: 'inline-block', marginBottom: '4px', fontWeight: 'bold' }}>
                           {eventName}
                         </div>
