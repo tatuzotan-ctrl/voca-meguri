@@ -111,10 +111,10 @@ export default function HomePage() {
     localStorage.setItem('voca_my_checks', JSON.stringify(newChecks));
   };
 
-  const toggleVisited = (postId: string) => {
+  const toggleVisited = async (postId: string) => {
     let newVisited = visitedIds.includes(postId) ? visitedIds.filter(id => id !== postId) : [...visitedIds, postId];
     setVisitedIds(newVisited);
-    localStorage.setItem('voca_visited_ids', JSON.stringify(newVisited));
+    await supabase.from('mylists').insert([{ user_id: myId, promotion_id: postId }]);
   };
 
   const uploadImage = async (file: File, bucketPath: string) => {
