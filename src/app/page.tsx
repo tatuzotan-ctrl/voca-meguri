@@ -11,9 +11,9 @@ export default function HomePage() {
   const [pName, setPName] = useState('');
   
   const [allPosts, setAllPosts] = useState<any[]>([]);
-  const [myChecks, setMyChecks] = useState<string[]>([]);
+  const [myChecks, setMyChecks] = useState<string[]>([]); // マイリスト登録ID
+  const [visitedIds, setVisitedIds] = useState<string[]>([]); // 巡回済みID
 
-  // フォーム用ステート
   const [selectedTag, setSelectedTag] = useState('ボカロ15秒投稿祭 (2026.04.18 ~ 2026.04.18)'); 
   const [inputPName, setInputPName] = useState('');
   const [songTitle, setSongTitle] = useState('');
@@ -35,8 +35,12 @@ export default function HomePage() {
       setInputPName(name || '');
     }
     fetchAllPosts();
+    
+    // 保存されたリストと巡回状況を復元
     const savedChecks = localStorage.getItem('voca_my_checks');
     if (savedChecks) setMyChecks(JSON.parse(savedChecks));
+    const savedVisited = localStorage.getItem('voca_visited_ids');
+    if (savedVisited) setVisitedIds(JSON.parse(savedVisited));
   }, []);
 
   const fetchAllPosts = async () => {
@@ -51,6 +55,13 @@ export default function HomePage() {
     let newChecks = myChecks.includes(postId) ? myChecks.filter(id => id !== postId) : [...myChecks, postId];
     setMyChecks(newChecks);
     localStorage.setItem('voca_my_checks', JSON.stringify(newChecks));
+  };
+
+  // 巡回済みチェックの切り替え
+  const toggleVisited = (postId: string) => {
+    let newVisited = visitedIds.includes(postId) ? visitedIds.filter(id => id !== postId) : [...visitedIds, postId];
+    setVisitedIds(newVisited);
+    localStorage.setItem('voca_visited_ids', JSON.stringify(newVisited));
   };
 
   const uploadImage = async (file: File, bucketPath: string) => {
@@ -84,7 +95,8 @@ export default function HomePage() {
 
   if (!isLoggedIn) return null;
 
-  const PostCard = ({ post }: { post: any }) => (
+  // 共通カードコンポーネント
+  const PostCard = ({ post, isMyPage = false }: { post: any, isMyPage?: boolean }) => (
     <div style={cardStyle}>
       <div style={{ display: 'flex', gap: '25px', alignItems: 'flex-start' }}>
         <div style={{ flexShrink: 0 }}>
@@ -105,9 +117,18 @@ export default function HomePage() {
           <p style={commentStyle}>{post.comment}</p>
           <div style={{ display: 'flex', gap: '25px', alignItems: 'center', marginTop: '15px' }}>
             <a href={post.video_url} target="_blank" rel="noopener noreferrer" style={iconLinkStyle}>📺 視聴</a>
-            <button onClick={() => toggleCheck(post.id)} style={checkBtnStyle(myChecks.includes(post.id))}>
-              {myChecks.includes(post.id) ? '💖 リスト済' : '🤍 リストに追加'}
-            </button>
+            
+            {isMyPage ? (
+              // マイリスト専用：巡回チェックボタン
+              <button onClick={() => toggleVisited(post.id)} style={visitBtnStyle(visitedIds.includes(post.id))}>
+                {visitedIds.includes(post.id) ? '巡回済 ✅' : '未巡回 ⚪'}
+              </button>
+            ) : (
+              // 一覧専用：リスト登録ボタン
+              <button onClick={() => toggleCheck(post.id)} style={checkBtnStyle(myChecks.includes(post.id))}>
+                {myChecks.includes(post.id) ? '💖 リスト済' : '🤍 リストに追加'}
+              </button>
+            )}
           </div>
         </div>
       </div>
@@ -117,42 +138,54 @@ export default function HomePage() {
   return (
     <div style={{ maxWidth: '700px', margin: '0 auto', padding: '20px', backgroundColor: '#fff', minHeight: '100vh', fontFamily: 'sans-serif' }}>
       
+      {/* ヘッダー */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '30px' }}>
         <h1 style={{ color: '#0056b3', fontSize: '2.2rem', fontWeight: 'bold', margin: 0 }}>巡ログ <span style={{ fontSize: '1.2rem', fontWeight: 'normal' }}>β</span></h1>
         <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-          <div style={{ textAlign: 'right' }}>
-            <div style={{ fontSize: '1rem', color: '#333', fontWeight: 'bold' }}>{pName} さん</div>
-          </div>
+          <div style={{ textAlign: 'right' }}><div style={{ fontSize: '1rem', color: '#333', fontWeight: 'bold' }}>{pName} さん</div></div>
           <button onClick={() => { localStorage.clear(); window.location.reload(); }} style={logoutBtnStyle}>ログアウト</button>
         </div>
       </div>
 
-      <div style={{ display: 'flex', gap: '12px', marginBottom: '40px' }}>
+      {/* メインタブ */}
+      <div style={{ display: 'flex', gap: '12px', marginBottom: '15px' }}>
         <button onClick={() => setActiveTab('list')} style={navBtnStyle(activeTab === 'list')}>全員の作品</button>
         <button onClick={() => setActiveTab('mypage')} style={navBtnStyle(activeTab === 'mypage')}>マイリスト</button>
         <button onClick={() => setActiveTab('post')} style={postAddBtnStyle(activeTab === 'post')}>＋ 作品を登録</button>
       </div>
 
+      {/* --- 全員の作品タブ --- */}
       {activeTab === 'list' && (
-        <div style={{ display: 'grid', gap: '20px' }}>
+        <div style={{ display: 'grid', gap: '20px', marginTop: '25px' }}>
           {allPosts.map(post => <PostCard key={post.id} post={post} />)}
         </div>
       )}
 
+      {/* --- マイリストタブ（カウンター追加） --- */}
       {activeTab === 'mypage' && (
         <div style={{ display: 'grid', gap: '20px' }}>
-          <h2 style={{ fontSize: '1.2rem', marginBottom: '10px', color: '#333' }}>マイリスト 💖</h2>
+          {/* 登録数・巡回済カウンターパネル */}
+          <div style={{ display: 'flex', gap: '12px', marginBottom: '10px' }}>
+            <div style={counterBoxStyle('#f8f9fa', '#666')}>
+              登録数 <span style={{fontSize: '1.4rem', color: '#0056b3'}}>{allPosts.filter(p => myChecks.includes(p.id)).length}</span>
+            </div>
+            <div style={counterBoxStyle('#f0fff4', '#28a745')}>
+              巡回済 <span style={{fontSize: '1.4rem'}}>{allPosts.filter(p => myChecks.includes(p.id) && visitedIds.includes(p.id)).length}</span>
+            </div>
+          </div>
+
           {allPosts.filter(p => myChecks.includes(p.id)).length > 0 ? (
-            allPosts.filter(p => myChecks.includes(p.id)).map(post => <PostCard key={post.id} post={post} />)
+            allPosts.filter(p => myChecks.includes(p.id)).map(post => <PostCard key={post.id} post={post} isMyPage={true} />)
           ) : (
             <p style={{ textAlign: 'center', color: '#999', marginTop: '40px' }}>リストに登録された作品はありません。</p>
           )}
         </div>
       )}
 
+      {/* --- 作品登録タブ --- */}
       {activeTab === 'post' && (
-        <div style={{ width: '100%' }}>
-          <h2 style={{ textAlign: 'center', marginBottom: '30px', fontSize: '1.2rem', color: '#333' }}>新曲を登録する 🚀</h2>
+        <div style={{ width: '100%', marginTop: '25px' }}>
+          <h2 style={{ textAlign: 'center', marginBottom: '30px', fontSize: '1.2rem' }}>新曲を登録する 🚀</h2>
           <form onSubmit={handlePostSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '15px' }}>
             <select value={selectedTag} onChange={(e) => setSelectedTag(e.target.value)} style={classicInput}>
               <option value="ボカロ15秒投稿祭 (2026.04.18 ~ 2026.04.18)">ボカロ15秒投稿祭 (2026.04.18 ~ 2026.04.18)</option>
@@ -172,7 +205,6 @@ export default function HomePage() {
         </div>
       )}
 
-      {/* --- フッター：修正完了 --- */}
       <div style={{ textAlign: 'center', marginTop: '60px', color: '#bbb', fontSize: '0.8rem' }}>
         © 2026 巡ログ Project / 猫ヶ丘ガブリ
       </div>
@@ -180,7 +212,19 @@ export default function HomePage() {
   );
 }
 
-// --- スタイル定義（変更なし） ---
+// --- 新設・修正スタイル ---
+const counterBoxStyle = (bgColor: string, textColor: string) => ({
+  flex: 1, padding: '15px', borderRadius: '12px', backgroundColor: bgColor, color: textColor,
+  textAlign: 'center' as const, fontSize: '0.9rem', fontWeight: 'bold' as const, border: '1px solid #eee'
+});
+
+const visitBtnStyle = (isVisited: boolean) => ({
+  background: isVisited ? '#e6fffa' : '#f8f9fa', border: isVisited ? '1px solid #38b2ac' : '1px solid #ddd',
+  color: isVisited ? '#38b2ac' : '#666', borderRadius: '8px', padding: '6px 15px', cursor: 'pointer',
+  fontWeight: 'bold' as const, fontSize: '0.9rem', transition: '0.2s'
+});
+
+// --- 既存スタイル（維持） ---
 const navBtnStyle = (isActive: boolean) => ({ flex: 1, padding: '14px', borderRadius: '12px', border: '1px solid #ddd', cursor: 'pointer', backgroundColor: isActive ? '#0d6efd' : '#fff', color: isActive ? '#fff' : '#333', fontWeight: 'bold' as const });
 const postAddBtnStyle = (isActive: boolean) => ({ flex: 1, padding: '14px', borderRadius: '12px', border: '1px solid #0d6efd', cursor: 'pointer', backgroundColor: '#fff', color: '#0d6efd', fontWeight: 'bold' as const });
 const cardStyle = { width: '100%', border: '1px solid #eee', padding: '25px', borderRadius: '20px', backgroundColor: '#fff', marginBottom: '20px', boxShadow: '0 4px 12px rgba(0,0,0,0.03)' };
