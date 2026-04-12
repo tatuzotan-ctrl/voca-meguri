@@ -9,9 +9,10 @@ export default function HomePage() {
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [myId, setMyId] = useState<string | null>(null);
   const [pName, setPName] = useState('');
+  const [myIcon, setMyIcon] = useState('');
   
   const [allPosts, setAllPosts] = useState<any[]>([]);
-  const [myChecks, setMyChecks] = useState<string[]>([]); // チェックした投稿IDを保存
+  const [myChecks, setMyChecks] = useState<string[]>([]);
 
   // フォーム用
   const [inputPName, setInputPName] = useState('');
@@ -34,7 +35,6 @@ export default function HomePage() {
       setInputPName(name || '');
     }
     fetchAllPosts();
-    // ローカルストレージからチェック情報を復元
     const savedChecks = localStorage.getItem('voca_my_checks');
     if (savedChecks) setMyChecks(JSON.parse(savedChecks));
   }, []);
@@ -47,14 +47,8 @@ export default function HomePage() {
     if (!error) setAllPosts(data || []);
   };
 
-  // チェックボタンの切り替え
   const toggleCheck = (postId: string) => {
-    let newChecks;
-    if (myChecks.includes(postId)) {
-      newChecks = myChecks.filter(id => id !== postId);
-    } else {
-      newChecks = [...myChecks, postId];
-    }
+    let newChecks = myChecks.includes(postId) ? myChecks.filter(id => id !== postId) : [...myChecks, postId];
     setMyChecks(newChecks);
     localStorage.setItem('voca_my_checks', JSON.stringify(newChecks));
   };
@@ -63,8 +57,7 @@ export default function HomePage() {
     const fileExt = file.name.split('.').pop();
     const fileName = `${Math.random()}.${fileExt}`;
     const filePath = `${bucketPath}/${fileName}`;
-    const { error: uploadError } = await supabase.storage.from('images').upload(filePath, file);
-    if (uploadError) throw uploadError;
+    await supabase.storage.from('images').upload(filePath, file);
     const { data } = supabase.storage.from('images').getPublicUrl(filePath);
     return data.publicUrl;
   };
@@ -79,93 +72,64 @@ export default function HomePage() {
       if (iconRef.current?.files?.[0]) finalIcon = await uploadImage(iconRef.current.files[0], 'icons');
 
       const { error } = await supabase.from('promotions').insert([{ 
-        song_title: songTitle, 
-        video_url: songUrl, // ここを video_url に修正済み
-        comment: comment,
-        author_id: myId,
-        thumbnail_url: finalThumb,
-        icon_url: finalIcon,
-        // contributor_name: inputPName 
+        song_title: songTitle, video_url: songUrl, comment: comment,
+        author_id: myId, thumbnail_url: finalThumb, icon_url: finalIcon,
       }]);
-
       if (error) throw error;
       alert('宣伝完了！✨');
       setSongTitle(''); setSongUrl(''); setComment('');
-      fetchAllPosts();
-      setActiveTab('list');
-    } catch (error: any) {
-      alert('エラー： ' + error.message);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleDelete = async (postId: string) => {
-    if (!confirm('削除するよ？🦖')) return;
-    await supabase.from('promotions').delete().eq('id', postId);
-    fetchAllPosts();
+      fetchAllPosts(); setActiveTab('list');
+    } catch (error: any) { alert(error.message); } finally { setLoading(false); }
   };
 
   if (!isLoggedIn) return (
     <div style={{ textAlign: 'center', marginTop: '100px' }}>
-      <h1>巡回ログ 🦖</h1>
       <button onClick={() => router.push('/login')} style={btnStyle('#0070f3', true)}>ログイン</button>
     </div>
   );
 
   return (
-    <div style={{ maxWidth: '600px', margin: '0 auto', padding: '20px', fontFamily: 'sans-serif' }}>
-      <h1 style={{ textAlign: 'center', fontSize: '1.5rem' }}>巡回ログ 2.0 🦖</h1>
-
-      {/* --- タブ --- */}
-      <div style={{ display: 'flex', justifyContent: 'center', gap: '20px', marginBottom: '20px', borderBottom: '1px solid #ddd' }}>
-        <button onClick={() => setActiveTab('list')} style={tabStyle(activeTab === 'list')}>投稿作品一覧</button>
-        <button onClick={() => setActiveTab('mypage')} style={tabStyle(activeTab === 'mypage')}>マイページ</button>
-        <button onClick={() => setActiveTab('post')} style={tabStyle(activeTab === 'post')}>作品登録</button>
+    <div style={{ maxWidth: '700px', margin: '0 auto', padding: '20px', backgroundColor: '#fff', minHeight: '100vh' }}>
+      
+      {/* --- ヘッダー領域 --- */}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '30px' }}>
+        <h1 style={{ color: '#0056b3', fontSize: '2rem', fontWeight: 'bold', margin: 0 }}>巡ログ <span style={{ fontSize: '1rem', fontWeight: 'normal' }}>β</span></h1>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+          <img src={myIcon || 'https://via.placeholder.com/40'} style={{ width: '40px', height: '40px', borderRadius: '50%', border: '1px solid #ddd' }} />
+          <button onClick={() => { localStorage.clear(); window.location.reload(); }} style={logoutBtnStyle}>ログアウト</button>
+        </div>
       </div>
 
-      {/* --- 一覧表示 --- */}
+      {/* --- メインナビゲーション（丸角ボタン型） --- */}
+      <div style={{ display: 'flex', gap: '15px', marginBottom: '40px' }}>
+        <button onClick={() => setActiveTab('list')} style={navBtnStyle(activeTab === 'list')}>全員の作品</button>
+        <button onClick={() => setActiveTab('mypage')} style={navBtnStyle(activeTab === 'mypage')}>マイリスト</button>
+        <button onClick={() => setActiveTab('post')} style={postAddBtnStyle(activeTab === 'post')}>＋ 作品を登録</button>
+      </div>
+
+      {/* --- コンテンツエリア --- */}
       {activeTab === 'list' && (
-        <div style={{ display: 'grid', gap: '15px' }}>
+        <div style={{ display: 'grid', gap: '20px' }}>
           {allPosts.map(post => (
             <div key={post.id} style={cardStyle}>
-              <div style={{ display: 'flex', gap: '12px' }}>
-                <img 
-                  src={post.thumbnail_url || 'https://via.placeholder.com/150x90?text=No+Image'} 
-                  style={{ width: '120px', height: '70px', objectFit: 'cover', borderRadius: '8px' }} 
-                  alt="thumb" 
-                />
+              <div style={{ display: 'flex', gap: '20px' }}>
+                <img src={post.thumbnail_url || 'https://via.placeholder.com/180x100'} style={thumbImgStyle} />
                 <div style={{ flex: 1, position: 'relative' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '5px', marginBottom: '3px' }}>
-                    <img src={post.icon_url || 'https://via.placeholder.com/24'} style={{ width: '20px', height: '20px', borderRadius: '50%' }} alt="icon" />
-                    <span style={{ fontSize: '0.8rem', color: '#0070f3', fontWeight: 'bold' }}>{post.app_users?.p_name || '不明なP'}</span>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                    <span style={tagStyle}>ボカロ15秒投稿祭</span>
+                    {post.author_id === myId && <button onClick={() => handleDelete(post.id)} style={deleteStyle}>削除</button>}
                   </div>
-                  <h3 style={{ margin: '0', fontSize: '1rem' }}>{post.song_title}</h3>
-                  <p style={{ fontSize: '0.85rem', color: '#555', margin: '3px 0' }}>{post.comment}</p>
-                  
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '5px' }}>
-                    {/* 修正ポイント：hrefを video_url に */}
-                    <a href={post.video_url} target="_blank" rel="noopener noreferrer" style={{ fontSize: '0.9rem', color: '#333', fontWeight: 'bold', textDecoration: 'none' }}>
-                      聴きにいく 🔗
-                    </a>
-
-                    <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
-                      {/* マイページ登録チェックボタン */}
-                      <button 
-                        onClick={() => toggleCheck(post.id)}
-                        style={{ 
-                          background: 'none', border: '1px solid #ccc', borderRadius: '5px', padding: '3px 8px', cursor: 'pointer',
-                          backgroundColor: myChecks.includes(post.id) ? '#ffd700' : 'transparent',
-                          fontSize: '0.8rem'
-                        }}
-                      >
-                        {myChecks.includes(post.id) ? '✅ チェック済み' : '📌 マイページ登録'}
-                      </button>
-
-                      {post.author_id === myId && (
-                        <button onClick={() => handleDelete(post.id)} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '1.2rem' }}>🗑️</button>
-                      )}
-                    </div>
+                  <h3 style={{ fontSize: '1.2rem', margin: '5px 0' }}>{post.song_title}</h3>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '10px' }}>
+                    <img src={post.icon_url || 'https://via.placeholder.com/24'} style={{ width: '24px', height: '24px', borderRadius: '50%' }} />
+                    <span style={{ color: '#666', fontSize: '0.9rem' }}>{post.app_users?.p_name}</span>
+                  </div>
+                  <p style={{ fontSize: '0.95rem', color: '#444', marginBottom: '15px' }}>{post.comment}</p>
+                  <div style={{ display: 'flex', gap: '20px', alignItems: 'center' }}>
+                    <a href={post.video_url} target="_blank" style={iconLinkStyle}>📺 視聴</a>
+                    <button onClick={() => toggleCheck(post.id)} style={checkBtnStyle(myChecks.includes(post.id))}>
+                      {myChecks.includes(post.id) ? '💖 リスト済' : '🤍 リストに追加'}
+                    </button>
                   </div>
                 </div>
               </div>
@@ -174,46 +138,64 @@ export default function HomePage() {
         </div>
       )}
 
-      {/* --- 作品登録 --- */}
+      {/* --- 作品登録フォーム（昨日のイメージに合わせた余白と色） --- */}
       {activeTab === 'post' && (
-        <form onSubmit={handlePostSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-          <label style={labelStyle}>ボカロP名</label>
-          <input type="text" value={inputPName} onChange={(e) => setInputPName(e.target.value)} style={inputStyle} />
-          <input type="text" placeholder="曲のタイトル" value={songTitle} onChange={(e) => setSongTitle(e.target.value)} required style={inputStyle} />
-          <input type="url" placeholder="動画URL (YouTube/niconico)" value={songUrl} onChange={(e) => setSongUrl(e.target.value)} required style={inputStyle} />
-          <label style={labelStyle}>サムネイル</label>
-          <input type="file" ref={thumbRef} style={inputStyle} />
-          <label style={labelStyle}>アイコン</label>
-          <input type="file" ref={iconRef} style={inputStyle} />
-          <textarea placeholder="一言コメント" value={comment} onChange={(e) => setComment(e.target.value)} style={{ ...inputStyle, minHeight: '80px' }} />
-          <button type="submit" disabled={loading} style={btnStyle('#0070f3', true)}>
-            {loading ? '送信中...' : 'この内容で宣伝する！'}
-          </button>
-        </form>
-      )}
-
-      {/* --- マイページ（簡易版：チェックした曲だけ表示） --- */}
-      {activeTab === 'mypage' && (
-        <div>
-          <h2>チェックした作品一覧 📌</h2>
-          {allPosts.filter(p => myChecks.includes(p.id)).length > 0 ? (
-            allPosts.filter(p => myChecks.includes(p.id)).map(post => (
-              <div key={post.id} style={{ ...cardStyle, marginBottom: '10px' }}>
-                <strong>{post.song_title}</strong>
-                <p><a href={post.video_url} target="_blank">聴きにいく</a></p>
+        <div style={{ padding: '20px' }}>
+          <h2 style={{ textAlign: 'center', marginBottom: '30px' }}>新曲を登録する 🚀</h2>
+          <form onSubmit={handlePostSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+            <input type="text" placeholder="曲のタイトル" value={songTitle} onChange={(e) => setSongTitle(e.target.value)} required style={classicInput} />
+            <input type="url" placeholder="動画URL (YouTube/niconico)" value={songUrl} onChange={(e) => setSongUrl(e.target.value)} required style={classicInput} />
+            <textarea placeholder="一言コメント" value={comment} onChange={(e) => setComment(e.target.value)} style={{ ...classicInput, minHeight: '120px' }} />
+            <div style={{ display: 'flex', gap: '10px' }}>
+              <div style={{ flex: 1 }}>
+                <label style={labelStyle}>サムネイル画像</label>
+                <input type="file" ref={thumbRef} style={classicInput} />
               </div>
-            ))
-          ) : <p>まだチェックした作品はありません。</p>}
-          <button onClick={() => { localStorage.clear(); window.location.reload(); }} style={{ marginTop: '30px', color: 'red', border: 'none', background: 'none', cursor: 'pointer' }}>ログアウト</button>
+              <div style={{ flex: 1 }}>
+                <label style={labelStyle}>アイコン画像</label>
+                <input type="file" ref={iconRef} style={classicInput} />
+              </div>
+            </div>
+            <button type="submit" disabled={loading} style={btnStyle('#0d6efd', true)}>
+              {loading ? '送信中...' : 'この内容で宣伝する！'}
+            </button>
+          </form>
         </div>
       )}
+
+      {/* --- フッター --- */}
+      <div style={{ textAlign: 'center', marginTop: '60px', color: '#999', fontSize: '0.8rem' }}>
+        © 2026 巡ログ Project / {pName}
+      </div>
     </div>
   );
 }
 
-// スタイル
-const tabStyle = (isActive: boolean) => ({ padding: '10px', cursor: 'pointer', border: 'none', backgroundColor: 'transparent', borderBottom: isActive ? '3px solid #0070f3' : 'none', color: isActive ? '#0070f3' : '#666', fontWeight: isActive ? 'bold' : 'normal' });
-const cardStyle = { padding: '15px', border: '1px solid #f0f0f0', borderRadius: '12px', backgroundColor: '#fff', boxShadow: '0 4px 6px rgba(0,0,0,0.02)' };
-const inputStyle = { width: '100%', padding: '10px', borderRadius: '8px', border: '1px solid #ddd' };
-const labelStyle = { fontSize: '0.8rem', color: '#666', marginBottom: '-8px' };
-const btnStyle = (color: string, full: boolean) => ({ width: full ? '100%' : 'auto', padding: '12px', backgroundColor: color, color: 'white', border: 'none', borderRadius: '8px', cursor: 'pointer', fontWeight: 'bold' });
+// --- スタイル定義（昨日のイメージを再現） ---
+const navBtnStyle = (isActive: boolean) => ({
+  flex: 1, padding: '15px', borderRadius: '12px', border: '1px solid #ddd', cursor: 'pointer',
+  backgroundColor: isActive ? '#0d6efd' : '#fff', color: isActive ? '#fff' : '#333',
+  fontWeight: 'bold', fontSize: '1rem', transition: '0.2s'
+});
+
+const postAddBtnStyle = (isActive: boolean) => ({
+  flex: 1, padding: '15px', borderRadius: '12px', border: isActive ? '2px solid #0d6efd' : '1px solid #0d6efd',
+  cursor: 'pointer', backgroundColor: '#fff', color: '#0d6efd', fontWeight: 'bold', fontSize: '1rem'
+});
+
+const cardStyle = {
+  border: '1px solid #eee', padding: '25px', borderRadius: '20px', backgroundColor: '#fff',
+  boxShadow: '0 10px 20px rgba(0,0,0,0.02)'
+};
+
+const thumbImgStyle = { width: '180px', height: '110px', objectFit: 'cover' as const, borderRadius: '12px' };
+const tagStyle = { backgroundColor: '#eef4ff', color: '#0d6efd', padding: '4px 12px', borderRadius: '5px', fontSize: '0.75rem', fontWeight: 'bold' };
+const iconLinkStyle = { textDecoration: 'none', color: '#0d6efd', fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: '5px' };
+const checkBtnStyle = (isCheck: boolean) => ({
+  background: 'none', border: 'none', color: isCheck ? '#e91e63' : '#666', cursor: 'pointer', fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: '5px'
+});
+const deleteStyle = { color: '#ff4d4f', background: 'none', border: 'none', cursor: 'pointer', fontSize: '0.85rem' };
+const logoutBtnStyle = { padding: '5px 15px', borderRadius: '8px', border: '1px solid #ddd', backgroundColor: '#f8f9fa', cursor: 'pointer' };
+const classicInput = { width: '100%', padding: '15px', borderRadius: '12px', border: '1px solid #ccc', fontSize: '1rem' };
+const labelStyle = { display: 'block', fontSize: '0.8rem', color: '#666', marginBottom: '5px' };
+const btnStyle = (color: string, full: boolean) => ({ width: full ? '100%' : 'auto', padding: '15px', backgroundColor: color, color: 'white', border: 'none', borderRadius: '12px', cursor: 'pointer', fontWeight: 'bold', fontSize: '1.1rem' });
