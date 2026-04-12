@@ -20,13 +20,18 @@ export default function HomePage() {
   const [inputPName, setInputPName] = useState('');
   const [songTitle, setSongTitle] = useState('');
   const [songUrl, setSongUrl] = useState('');
-  const [repostUrl, setRepostUrl] = useState(''); // 💡 新規追加
+  const [repostUrl, setRepostUrl] = useState('');
   const [comment, setComment] = useState('');
   const [loading, setLoading] = useState(false);
 
   const router = useRouter();
   const thumbRef = useRef<HTMLInputElement>(null);
   const iconRef = useRef<HTMLInputElement>(null);
+
+  // 💡 画像未設定時のデフォルト画像URL
+  // ※昨日の「聴いてね♪」画像のパスに合わせて書き換えてニャ！
+  const DEFAULT_THUMB = '/images/listen-me.png'; 
+  const DEFAULT_ICON = '/images/default-cat-p.png';
 
   useEffect(() => {
     const userId = localStorage.getItem('voca_user_id');
@@ -107,16 +112,26 @@ export default function HomePage() {
     try {
       let finalThumb = '';
       let finalIcon = '';
-      if (thumbRef.current?.files?.[0]) finalThumb = await uploadImage(thumbRef.current.files[0], 'thumbnails');
-      if (iconRef.current?.files?.[0]) finalIcon = await uploadImage(iconRef.current.files[0], 'icons');
+      
+      // 画像があればアップロード、なければ空のまま（DB側でデフォルト処理も可）
+      if (thumbRef.current?.files?.[0]) {
+        finalThumb = await uploadImage(thumbRef.current.files[0], 'thumbnails');
+      }
+      if (iconRef.current?.files?.[0]) {
+        finalIcon = await uploadImage(iconRef.current.files[0], 'icons');
+      }
 
       const { error } = await supabase.from('promotions').insert([{ 
-        song_title: songTitle, video_url: songUrl, 
-        repost_url: repostUrl, // 💡 新規保存
+        song_title: songTitle, 
+        video_url: songUrl, 
+        repost_url: repostUrl,
         comment: comment,
-        author_id: myId, thumbnail_url: finalThumb, icon_url: finalIcon,
+        author_id: myId, 
+        thumbnail_url: finalThumb, // 空ならDBにnullが入るニャ
+        icon_url: finalIcon,      // 空ならDBにnullが入るニャ
         event_tag: selectedTag 
       }]);
+
       if (error) throw error;
       alert('宣伝完了！✨');
       setSongTitle(''); setSongUrl(''); setRepostUrl(''); setComment('');
@@ -128,7 +143,6 @@ export default function HomePage() {
     
     const generateXUrl = () => {
       const text = `${post.song_title} / ${post.app_users?.p_name} さんを視聴したニャ！\n\n#巡ログ #ボカロ`;
-      // 💡 repost_urlがあればそちらを優先、なければ動画URLを使用
       const targetUrl = post.repost_url || post.video_url;
       return `https://twitter.com/intent/tweet?text=${encodeURIComponent(text)}&url=${encodeURIComponent(targetUrl)}`;
     };
@@ -137,7 +151,12 @@ export default function HomePage() {
       <div style={cardStyle}>
         <div style={{ display: 'flex', gap: '25px', alignItems: 'flex-start' }}>
           <div style={{ flexShrink: 0 }}>
-            <img src={post.thumbnail_url || 'https://via.placeholder.com/180x110?text=No+Image'} style={thumbImgStyle} alt="thumb" />
+            {/* 💡 サムネイル未設定なら「聴いてね♪」を出すニャ！ */}
+            <img 
+              src={post.thumbnail_url || DEFAULT_THUMB} 
+              style={thumbImgStyle} 
+              alt="thumb" 
+            />
           </div>
           <div style={{ flex: 1, minWidth: 0 }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
@@ -148,7 +167,12 @@ export default function HomePage() {
             </div>
             <h3 style={titleStyle}>{post.song_title}</h3>
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '12px' }}>
-              <img src={post.icon_url || 'https://via.placeholder.com/24'} style={{ width: '24px', height: '24px', borderRadius: '50%', objectFit: 'cover' }} alt="icon" />
+              {/* 💡 アイコン未設定ならデフォルト猫アイコンを出すニャ！ */}
+              <img 
+                src={post.icon_url || DEFAULT_ICON} 
+                style={{ width: '24px', height: '24px', borderRadius: '50%', objectFit: 'cover' }} 
+                alt="icon" 
+              />
               <span style={{ color: '#666', fontSize: '0.9rem', fontWeight: 'bold' }}>{post.app_users?.p_name}</span>
             </div>
             <p style={commentStyle}>{post.comment}</p>
@@ -235,7 +259,6 @@ export default function HomePage() {
             <input type="text" placeholder="ボカロP名" value={inputPName} onChange={(e) => setInputPName(e.target.value)} style={classicInput} />
             <input type="url" placeholder="動画URL (YouTube/niconico)" value={songUrl} onChange={(e) => setSongUrl(e.target.value)} required style={classicInput} />
             
-            {/* 💡 追加：リポストして欲しいURL入力欄 */}
             <input 
               type="url" 
               placeholder="リポストして欲しいポストのURL (任意)" 
@@ -264,7 +287,7 @@ export default function HomePage() {
   );
 }
 
-// スタイル定義（省略・変更なし）
+// スタイル定義（維持）
 const counterBoxStyle = (bgColor: string, textColor: string) => ({ flex: 1, padding: '15px', borderRadius: '12px', backgroundColor: bgColor, color: textColor, textAlign: 'center' as const, fontSize: '0.9rem', fontWeight: 'bold' as const, border: '1px solid #eee' });
 const visitBtnStyle = (isVisited: boolean) => ({ background: isVisited ? '#e6fffa' : '#f8f9fa', border: isVisited ? '1px solid #38b2ac' : '1px solid #ddd', color: isVisited ? '#38b2ac' : '#666', borderRadius: '8px', padding: '6px 15px', cursor: 'pointer', fontWeight: 'bold' as const, fontSize: '0.9rem', transition: '0.2s' });
 const navBtnStyle = (isActive: boolean) => ({ flex: 1, padding: '14px', borderRadius: '12px', border: '1px solid #ddd', cursor: 'pointer', backgroundColor: isActive ? '#0d6efd' : '#fff', color: isActive ? '#fff' : '#333', fontWeight: 'bold' as const });
