@@ -82,7 +82,7 @@ export default function HomePage() {
         .from('promotions')
         .insert([{ 
           song_title: songTitle, 
-          song_url: songUrl, 
+          video_url: songUrl, 
           comment: comment,
           author_id: myId,
           thumbnail_url: finalThumb,
