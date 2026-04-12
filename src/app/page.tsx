@@ -16,6 +16,7 @@ export default function HomePage() {
 
   const [eventList, setEventList] = useState<any[]>([]);
   const [selectedEventId, setSelectedEventId] = useState<string>(''); 
+  const [isEventLoading, setIsEventLoading] = useState(true); // 💡 ロード状態を明示
   
   const [inputPName, setInputPName] = useState('');
   const [songTitle, setSongTitle] = useState('');
@@ -32,61 +33,68 @@ export default function HomePage() {
   const DEFAULT_ICON = '/images/default-cat-p.png';
 
   useEffect(() => {
-    // 💡 1. まずイベントをロードするニャ！
-    fetchActiveEvents();
-    
-    // 💡 2. ログインチェック
-    const userId = localStorage.getItem('voca_user_id');
-    const name = localStorage.getItem('voca_p_name');
-    
-    if (!userId) {
-      router.push('/login');
-      return;
-    }
-
-    setIsLoggedIn(true);
-    setMyId(userId);
-    setPName(name || 'ボカロP');
-    setInputPName(name || '');
-    
-    fetchAllPosts();
-    
-    const savedChecks = localStorage.getItem('voca_my_checks');
-    if (savedChecks) setMyChecks(JSON.parse(savedChecks));
-    const savedVisited = localStorage.getItem('voca_visited_ids');
-    if (savedVisited) setVisitedIds(JSON.parse(savedVisited));
-  }, [router]);
-
-  const fetchActiveEvents = async () => {
-    try {
-      const { data, error } = await supabase
-        .from('events')
-        .select('*')
-        .eq('is_active', true)
-        .order('start_date', { ascending: true });
-
-      if (error) {
-        console.error("イベント取得失敗ニャ！:", error.message);
+    const init = async () => {
+      // 1. ログインチェック
+      const userId = localStorage.getItem('voca_user_id');
+      const name = localStorage.getItem('voca_p_name');
+      
+      if (!userId) {
+        router.push('/login');
         return;
       }
 
-      if (data) {
-        setEventList(data);
-        if (data.length > 0) {
-          setSelectedEventId(data[0].id.toString());
-        }
+      setIsLoggedIn(true);
+      setMyId(userId);
+      setPName(name || 'ボカロP');
+      setInputPName(name || '');
+
+      // 2. データの取得
+      await Promise.all([
+        fetchActiveEvents(),
+        fetchAllPosts()
+      ]);
+      
+      const savedChecks = localStorage.getItem('voca_my_checks');
+      if (savedChecks) setMyChecks(JSON.parse(savedChecks));
+      const savedVisited = localStorage.getItem('voca_visited_ids');
+      if (savedVisited) setVisitedIds(JSON.parse(savedVisited));
+    };
+    init();
+  }, [router]);
+
+  const fetchActiveEvents = async () => {
+    setIsEventLoading(true);
+    const { data, error } = await supabase
+      .from('events')
+      .select('*')
+      .eq('is_active', true)
+      .order('start_date', { ascending: true });
+
+    if (!error && data) {
+      setEventList(data);
+      if (data.length > 0) {
+        setSelectedEventId(data[0].id.toString());
       }
-    } catch (e) {
-      console.error("想定外のエラーニャ:", e);
     }
+    setIsEventLoading(false);
   };
 
   const fetchAllPosts = async () => {
+    // 💡 promotions から event_id を通じて events の名前をガブッと結合
     const { data, error } = await supabase
       .from('promotions')
-      .select('*, app_users ( p_name ), events ( event_name )')
+      .select(`
+        *,
+        app_users ( p_name ),
+        events ( event_name )
+      `)
       .order('created_at', { ascending: false });
-    if (!error) setAllPosts(data || []);
+    
+    if (error) {
+      console.error("Fetch Posts Error:", error);
+    } else {
+      setAllPosts(data || []);
+    }
   };
 
   const handleLogout = () => {
@@ -119,7 +127,7 @@ export default function HomePage() {
   const handlePostSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedEventId) {
-      alert("イベントが読み込まれていないニャ。少し待ってから再試行してニャ！");
+      alert("イベントを選択してニャ！");
       return;
     }
     setLoading(true);
@@ -144,7 +152,8 @@ export default function HomePage() {
       if (error) throw error;
       alert('宣伝完了！✨');
       setSongTitle(''); setSongUrl(''); setRepostUrl(''); setComment('');
-      fetchAllPosts(); setActiveTab('list');
+      await fetchAllPosts(); 
+      setActiveTab('list');
     } catch (error: any) { alert(error.message); } finally { setLoading(false); }
   };
 
@@ -164,7 +173,8 @@ export default function HomePage() {
           <div style={{ flex: 1, minWidth: 0 }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
               <span style={tagStyle}>
-                {post.events?.event_name || 'イベント'}
+                {/* 💡 events テーブルから取得した名前を表示ニャ */}
+                {post.events?.event_name || 'イベント名なし'}
               </span>
               {post.author_id === myId && (
                 <button onClick={() => { if(confirm('削除する？')) supabase.from('promotions').delete().eq('id', post.id).then(fetchAllPosts); }} style={deleteStyle}>削除</button>
@@ -242,8 +252,10 @@ export default function HomePage() {
               onChange={(e) => setSelectedEventId(e.target.value)} 
               style={classicInput}
             >
-              {eventList.length === 0 ? (
+              {isEventLoading ? (
                 <option>イベントをロード中ニャ... 🐱</option>
+              ) : eventList.length === 0 ? (
+                <option>公開中のイベントがありません</option>
               ) : (
                 eventList.map((ev) => (
                   <option key={ev.id} value={ev.id}>
@@ -256,24 +268,19 @@ export default function HomePage() {
             <input type="text" placeholder="曲のタイトル" value={songTitle} onChange={(e) => setSongTitle(e.target.value)} required style={classicInput} />
             <input type="text" placeholder="ボカロP名" value={inputPName} onChange={(e) => setInputPName(e.target.value)} style={classicInput} />
             <input type="url" placeholder="動画URL (YouTube/niconico)" value={songUrl} onChange={(e) => setSongUrl(e.target.value)} required style={classicInput} />
-            
-            <input 
-              type="url" 
-              placeholder="リポストして欲しいポストのURL (任意)" 
-              value={repostUrl} 
-              onChange={(e) => setRepostUrl(e.target.value)} 
-              style={{ ...classicInput, border: '2px solid #000' }} 
-            />
-            <p style={{ fontSize: '0.75rem', color: '#666', marginTop: '-10px', paddingLeft: '5px' }}>
-              ※入力すると、引用RTボタンでこのポストが引用されるニャ！
-            </p>
+            <input type="url" placeholder="リポストして欲しいポストのURL (任意)" value={repostUrl} onChange={(e) => setRepostUrl(e.target.value)} style={{ ...classicInput, border: '2px solid #000' }} />
+            <p style={{ fontSize: '0.75rem', color: '#666', marginTop: '-10px', paddingLeft: '5px' }}>※引用RTボタンでこのポストが引用されます。</p>
 
             <textarea placeholder="一言コメント" value={comment} onChange={(e) => setComment(e.target.value)} style={{ ...classicInput, minHeight: '120px' }} />
+            
             <div style={{ display: 'flex', gap: '15px' }}>
               <div style={{ flex: 1 }}><label style={labelStyle}>サムネイル画像</label><input type="file" accept="image/*" ref={thumbRef} style={fileInputStyle} /></div>
               <div style={{ flex: 1 }}><label style={labelStyle}>アイコン画像</label><input type="file" accept="image/*" ref={iconRef} style={fileInputStyle} /></div>
             </div>
-            <button type="submit" disabled={loading} style={btnStyle('#0d6efd', true)}>{loading ? '送信中...' : 'この内容で宣伝する！'}</button>
+            
+            <button type="submit" disabled={loading} style={btnStyle('#0d6efd', true)}>
+              {loading ? '送信中...' : 'この内容で宣伝する！'}
+            </button>
           </form>
         </div>
       )}
