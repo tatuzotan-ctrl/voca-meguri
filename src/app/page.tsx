@@ -14,7 +14,7 @@ export default function HomePage() {
   const [myChecks, setMyChecks] = useState<string[]>([]);
   const [visitedIds, setVisitedIds] = useState<string[]>([]);
 
-  // 💡 動的なイベントリストのためのステート
+  // 💡 投稿祭の一覧管理（IDで管理するように統一ニャ！）
   const [eventList, setEventList] = useState<any[]>([]);
   const [selectedEventId, setSelectedEventId] = useState<string>(''); 
   
@@ -29,7 +29,7 @@ export default function HomePage() {
   const thumbRef = useRef<HTMLInputElement>(null);
   const iconRef = useRef<HTMLInputElement>(null);
 
-  // 💡 画像未設定時のデフォルト画像URL
+  // 💡 デフォルト画像（public/images/ に配置してニャ！）
   const DEFAULT_THUMB = '/images/listen-me.png'; 
   const DEFAULT_ICON = '/images/default-cat-p.png';
 
@@ -56,26 +56,26 @@ export default function HomePage() {
     if (savedVisited) setVisitedIds(JSON.parse(savedVisited));
   }, [router]);
 
-  // 💡 投稿祭の一覧を Table (events) から取得し、昇順で並べるニャ
+  // 💡 イベント取得：is_activeがtrueのものだけ持ってくるニャ
   const fetchActiveEvents = async () => {
     const { data, error } = await supabase
       .from('events')
       .select('*')
       .eq('is_active', true)
-      .order('start_date', { ascending: true }); // 早い順に整列
+      .order('start_date', { ascending: true });
 
     if (!error && data && data.length > 0) {
       setEventList(data);
-      // 初期値として最初のイベントの ID をセットするニャ
+      // 💡 取得できたら、最初のイベントIDを初期選択にするニャ
       setSelectedEventId(data[0].id.toString());
     }
   };
 
   const fetchAllPosts = async () => {
-    // 💡 promotions と events を外部キー event_id で結合して取得するニャ
+    // 💡 promotions と events を外部キーで結合。!left でイベントがなくても表示
     const { data, error } = await supabase
       .from('promotions')
-      .select('*, app_users ( p_name ), events ( event_name )')
+      .select('*, app_users ( p_name ), events!left ( event_name )')
       .order('created_at', { ascending: false });
     if (!error) setAllPosts(data || []);
   };
@@ -109,6 +109,10 @@ export default function HomePage() {
 
   const handlePostSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!selectedEventId) {
+      alert("イベントを選択してニャ！");
+      return;
+    }
     setLoading(true);
     try {
       let finalThumb = '';
@@ -117,7 +121,7 @@ export default function HomePage() {
       if (thumbRef.current?.files?.[0]) finalThumb = await uploadImage(thumbRef.current.files[0], 'thumbnails');
       if (iconRef.current?.files?.[0]) finalIcon = await uploadImage(iconRef.current.files[0], 'icons');
 
-      // 💡 カラム名 event_id に対し、数値を送信して bigint エラーを回避するニャ
+      // 💡 event_id に数値を送る。型ミスマッチを防ぐニャ！
       const { error } = await supabase.from('promotions').insert([{ 
         song_title: songTitle, 
         video_url: songUrl, 
@@ -140,7 +144,6 @@ export default function HomePage() {
     
     const generateXUrl = () => {
       const text = `${post.song_title} / ${post.app_users?.p_name} さんを視聴したニャ！\n\n#巡ログ #ボカロ`;
-      // 💡 repost_url があれば優先、なければ動画URLを使用
       const targetUrl = post.repost_url || post.video_url;
       return `https://twitter.com/intent/tweet?text=${encodeURIComponent(text)}&url=${encodeURIComponent(targetUrl)}`;
     };
@@ -154,8 +157,7 @@ export default function HomePage() {
           <div style={{ flex: 1, minWidth: 0 }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
               <span style={tagStyle}>
-                {/* events テーブルから結合した名前を表示するニャ */}
-                {post.events?.event_name || 'ボカロ15秒投稿祭'}
+                {post.events?.event_name || 'イベント未設定'}
               </span>
               {post.author_id === myId && (
                 <button onClick={() => { if(confirm('削除する？')) supabase.from('promotions').delete().eq('id', post.id).then(fetchAllPosts); }} style={deleteStyle}>削除</button>
@@ -215,7 +217,14 @@ export default function HomePage() {
 
       {activeTab === 'mypage' && (
         <div style={{ display: 'grid', gap: '20px' }}>
-          {/* ...中略（カウンター表示維持）... */}
+          <div style={{ display: 'flex', gap: '12px', marginBottom: '10px' }}>
+            <div style={counterBoxStyle('#f8f9fa', '#666')}>
+              登録数 <span style={{fontSize: '1.4rem', color: '#0056b3'}}>{allPosts.filter(p => myChecks.includes(p.id)).length}</span>
+            </div>
+            <div style={counterBoxStyle('#f0fff4', '#28a745')}>
+              巡回済 <span style={{fontSize: '1.4rem'}}>{allPosts.filter(p => myChecks.includes(p.id) && visitedIds.includes(p.id)).length}</span>
+            </div>
+          </div>
           {allPosts.filter(p => myChecks.includes(p.id)).length > 0 ? (
             allPosts.filter(p => myChecks.includes(p.id)).map(post => <PostCard key={post.id} post={post} isMyPage={true} />)
           ) : (
@@ -228,17 +237,21 @@ export default function HomePage() {
         <div style={{ width: '100%', marginTop: '25px' }}>
           <h2 style={{ textAlign: 'center', marginBottom: '30px', fontSize: '1.2rem' }}>新曲を登録する 🚀</h2>
           <form onSubmit={handlePostSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '15px' }}>
+            
+            {/* 💡 ここがプルダウン。valueはID、表示は名前と期間ニャ */}
             <select 
               value={selectedEventId} 
               onChange={(e) => setSelectedEventId(e.target.value)} 
               style={classicInput}
             >
+              {eventList.length === 0 && <option>イベントをロード中...</option>}
               {eventList.map((ev) => (
-                <option key={ev.id} value={ev.id}> {/* value を ID にするニャ */}
+                <option key={ev.id} value={ev.id}>
                   {ev.event_name} ({ev.start_date.replace(/-/g, '.')} ~ {ev.end_date.replace(/-/g, '.')})
                 </option>
               ))}
             </select>
+
             <input type="text" placeholder="曲のタイトル" value={songTitle} onChange={(e) => setSongTitle(e.target.value)} required style={classicInput} />
             <input type="text" placeholder="ボカロP名" value={inputPName} onChange={(e) => setInputPName(e.target.value)} style={classicInput} />
             <input type="url" placeholder="動画URL (YouTube/niconico)" value={songUrl} onChange={(e) => setSongUrl(e.target.value)} required style={classicInput} />
@@ -248,18 +261,22 @@ export default function HomePage() {
               placeholder="リポストして欲しいポストのURL (任意)" 
               value={repostUrl} 
               onChange={(e) => setRepostUrl(e.target.value)} 
-              style={{ ...classicInput, border: '1px solid #000' }} 
+              style={{ ...classicInput, border: '2px solid #000' }} 
             />
             <p style={{ fontSize: '0.75rem', color: '#666', marginTop: '-10px', paddingLeft: '5px' }}>
               ※入力すると、引用RTボタンでこのポストが引用されるニャ！
             </p>
 
             <textarea placeholder="一言コメント" value={comment} onChange={(e) => setComment(e.target.value)} style={{ ...classicInput, minHeight: '120px' }} />
+            
             <div style={{ display: 'flex', gap: '15px' }}>
               <div style={{ flex: 1 }}><label style={labelStyle}>サムネイル画像</label><input type="file" accept="image/*" ref={thumbRef} style={fileInputStyle} /></div>
               <div style={{ flex: 1 }}><label style={labelStyle}>アイコン画像</label><input type="file" accept="image/*" ref={iconRef} style={fileInputStyle} /></div>
             </div>
-            <button type="submit" disabled={loading} style={btnStyle('#0d6efd', true)}>{loading ? '送信中...' : 'この内容で宣伝する！'}</button>
+            
+            <button type="submit" disabled={loading} style={btnStyle('#0d6efd', true)}>
+              {loading ? '送信中...' : 'この内容で宣伝する！'}
+            </button>
           </form>
         </div>
       )}
@@ -271,7 +288,7 @@ export default function HomePage() {
   );
 }
 
-// スタイル定義（省略・変更なし）
+// スタイル定義（維持）
 const counterBoxStyle = (bgColor: string, textColor: string) => ({ flex: 1, padding: '15px', borderRadius: '12px', backgroundColor: bgColor, color: textColor, textAlign: 'center' as const, fontSize: '0.9rem', fontWeight: 'bold' as const, border: '1px solid #eee' });
 const visitBtnStyle = (isVisited: boolean) => ({ background: isVisited ? '#e6fffa' : '#f8f9fa', border: isVisited ? '1px solid #38b2ac' : '1px solid #ddd', color: isVisited ? '#38b2ac' : '#666', borderRadius: '8px', padding: '6px 15px', cursor: 'pointer', fontWeight: 'bold' as const, fontSize: '0.9rem', transition: '0.2s' });
 const navBtnStyle = (isActive: boolean) => ({ flex: 1, padding: '14px', borderRadius: '12px', border: '1px solid #ddd', cursor: 'pointer', backgroundColor: isActive ? '#0d6efd' : '#fff', color: isActive ? '#fff' : '#333', fontWeight: 'bold' as const });
