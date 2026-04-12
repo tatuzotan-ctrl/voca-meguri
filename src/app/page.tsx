@@ -84,43 +84,27 @@ export default function HomePage() {
 
   if (!isLoggedIn) return null;
 
-  // 投稿カードの共通コンポーネント
   const PostCard = ({ post }: { post: any }) => (
     <div style={cardStyle}>
       <div style={{ display: 'flex', gap: '25px', alignItems: 'flex-start' }}>
         <div style={{ flexShrink: 0 }}>
-          <img 
-            src={post.thumbnail_url || 'https://via.placeholder.com/180x110?text=No+Image'} 
-            style={thumbImgStyle} 
-            alt="thumb" 
-          />
+          <img src={post.thumbnail_url || 'https://via.placeholder.com/180x110?text=No+Image'} style={thumbImgStyle} alt="thumb" />
         </div>
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
             <span style={tagStyle}>ボカロ15秒投稿祭</span>
             {post.author_id === myId && (
-              <button 
-                onClick={() => { if(confirm('削除する？')) supabase.from('promotions').delete().eq('id', post.id).then(fetchAllPosts); }} 
-                style={deleteStyle}
-              >
-                削除
-              </button>
+              <button onClick={() => { if(confirm('削除する？')) supabase.from('promotions').delete().eq('id', post.id).then(fetchAllPosts); }} style={deleteStyle}>削除</button>
             )}
           </div>
           <h3 style={titleStyle}>{post.song_title}</h3>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '12px' }}>
-            <img 
-              src={post.icon_url || 'https://via.placeholder.com/24'} 
-              style={{ width: '24px', height: '24px', borderRadius: '50%', objectFit: 'cover' }} 
-              alt="icon" 
-            />
+            <img src={post.icon_url || 'https://via.placeholder.com/24'} style={{ width: '24px', height: '24px', borderRadius: '50%', objectFit: 'cover' }} alt="icon" />
             <span style={{ color: '#666', fontSize: '0.9rem', fontWeight: 'bold' }}>{post.app_users?.p_name}</span>
           </div>
           <p style={commentStyle}>{post.comment}</p>
           <div style={{ display: 'flex', gap: '25px', alignItems: 'center', marginTop: '15px' }}>
-            <a href={post.video_url} target="_blank" rel="noopener noreferrer" style={iconLinkStyle}>
-              📺 視聴
-            </a>
+            <a href={post.video_url} target="_blank" rel="noopener noreferrer" style={iconLinkStyle}>📺 視聴</a>
             <button onClick={() => toggleCheck(post.id)} style={checkBtnStyle(myChecks.includes(post.id))}>
               {myChecks.includes(post.id) ? '💖 リスト済' : '🤍 リストに追加'}
             </button>
@@ -133,11 +117,8 @@ export default function HomePage() {
   return (
     <div style={{ maxWidth: '700px', margin: '0 auto', padding: '20px', backgroundColor: '#fff', minHeight: '100vh', fontFamily: 'sans-serif' }}>
       
-      {/* --- ヘッダー領域（IDを削除して名前のみに集約） --- */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '30px' }}>
-        <h1 style={{ color: '#0056b3', fontSize: '2.2rem', fontWeight: 'bold', margin: 0 }}>
-          巡ログ <span style={{ fontSize: '1.2rem', fontWeight: 'normal' }}>β</span>
-        </h1>
+        <h1 style={{ color: '#0056b3', fontSize: '2.2rem', fontWeight: 'bold', margin: 0 }}>巡ログ <span style={{ fontSize: '1.2rem', fontWeight: 'normal' }}>β</span></h1>
         <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
           <div style={{ textAlign: 'right' }}>
             <div style={{ fontSize: '1rem', color: '#333', fontWeight: 'bold' }}>{pName} さん</div>
@@ -146,14 +127,12 @@ export default function HomePage() {
         </div>
       </div>
 
-      {/* --- メインタブ --- */}
       <div style={{ display: 'flex', gap: '12px', marginBottom: '40px' }}>
         <button onClick={() => setActiveTab('list')} style={navBtnStyle(activeTab === 'list')}>全員の作品</button>
         <button onClick={() => setActiveTab('mypage')} style={navBtnStyle(activeTab === 'mypage')}>マイリスト</button>
         <button onClick={() => setActiveTab('post')} style={postAddBtnStyle(activeTab === 'post')}>＋ 作品を登録</button>
       </div>
 
-      {/* --- コンテンツ --- */}
       {activeTab === 'list' && (
         <div style={{ display: 'grid', gap: '20px' }}>
           {allPosts.map(post => <PostCard key={post.id} post={post} />)}
@@ -193,15 +172,15 @@ export default function HomePage() {
         </div>
       )}
 
-      {/* --- フッター（コピーライト修正） --- */}
+      {/* --- フッター：修正完了 --- */}
       <div style={{ textAlign: 'center', marginTop: '60px', color: '#bbb', fontSize: '0.8rem' }}>
-        © 2026 巡ログ Project / {pName}
+        © 2026 巡ログ Project / 猫ヶ丘ガブリ
       </div>
     </div>
   );
 }
 
-// --- スタイル定義 ---
+// --- スタイル定義（変更なし） ---
 const navBtnStyle = (isActive: boolean) => ({ flex: 1, padding: '14px', borderRadius: '12px', border: '1px solid #ddd', cursor: 'pointer', backgroundColor: isActive ? '#0d6efd' : '#fff', color: isActive ? '#fff' : '#333', fontWeight: 'bold' as const });
 const postAddBtnStyle = (isActive: boolean) => ({ flex: 1, padding: '14px', borderRadius: '12px', border: '1px solid #0d6efd', cursor: 'pointer', backgroundColor: '#fff', color: '#0d6efd', fontWeight: 'bold' as const });
 const cardStyle = { width: '100%', border: '1px solid #eee', padding: '25px', borderRadius: '20px', backgroundColor: '#fff', marginBottom: '20px', boxShadow: '0 4px 12px rgba(0,0,0,0.03)' };
