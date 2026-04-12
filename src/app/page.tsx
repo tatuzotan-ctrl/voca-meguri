@@ -7,11 +7,11 @@ import { useRouter } from 'next/navigation';
 export default function HomePage() {
   const [activeTab, setActiveTab] = useState('list');
   const [isLoggedIn, setIsLoggedIn] = useState(false);
-  const [myId, setMyId] = useState<string | null>(null); // DBの user_id (text)
+  const [myId, setMyId] = useState<string | null>(null);
   const [pName, setPName] = useState('');
   
   const [allPosts, setAllPosts] = useState<any[]>([]);
-  const [myChecks, setMyChecks] = useState<string[]>([]); 
+  const [myChecks, setMyChecks] = useState<string[]>([]); // promotion_idの配列
   const [visitedIds, setVisitedIds] = useState<string[]>([]);
 
   const [eventList, setEventList] = useState<any[]>([]);
@@ -34,38 +34,40 @@ export default function HomePage() {
 
   useEffect(() => {
     const init = async () => {
-      const uId = localStorage.getItem('voca_user_id'); // これがDBの user_id (text)
+      const userId = localStorage.getItem('voca_user_id');
       const name = localStorage.getItem('voca_p_name');
       
-      if (!uId) {
+      if (!userId) {
         router.push('/login');
         return;
       }
 
       setIsLoggedIn(true);
-      setMyId(uId);
+      setMyId(userId);
       setPName(name || 'ボカロP');
       setInputPName(name || '');
 
       await Promise.all([
         fetchActiveEvents(),
         fetchAllPosts(),
-        fetchMyStatus(uId), 
+        fetchMyList(userId), // 💡 ログイン時にDBからリストをロード
       ]);
+      
+      const savedVisited = localStorage.getItem('voca_visited_ids');
+      if (savedVisited) setVisitedIds(JSON.parse(savedVisited));
     };
     init();
   }, [router]);
 
-  // 💡 patrol_status テーブルから「お気に入り」と「巡回済」を一気に取るニャ
-  const fetchMyStatus = async (userId: string) => {
+  // 💡 DBからマイリストを取得するニャ
+  const fetchMyList = async (userId: string) => {
     const { data, error } = await supabase
-      .from('patrol_status')
-      .select('promotion_id, is_favorite, is_visited')
+      .from('mylists')
+      .select('promotion_id')
       .eq('user_id', userId);
 
     if (!error && data) {
-      setMyChecks(data.filter(d => d.is_favorite).map(d => d.promotion_id.toString()));
-      setVisitedIds(data.filter(d => d.is_visited).map(d => d.promotion_id.toString()));
+      setMyChecks(data.map(item => item.promotion_id.toString()));
     }
   };
 
@@ -76,6 +78,7 @@ export default function HomePage() {
       .select('*')
       .eq('is_active', true)
       .order('start_date', { ascending: true });
+
     if (!error && data) {
       setEventList(data);
       if (data.length > 0) setSelectedEventId(data[0].id.toString());
@@ -98,41 +101,184 @@ export default function HomePage() {
     router.push('/login');
   };
 
-  // 💡 マイリスト登録 (is_favorite) をDBに刻むニャ！
+  // 💡 修正：DB（mylistsテーブル）と同期するトグル処理
   const toggleCheck = async (postId: string) => {
     if (!myId) return;
+
     const isChecked = myChecks.includes(postId);
-    const newChecks = isChecked ? myChecks.filter(id => id !== postId) : [...myChecks, postId];
+    const newChecks = isChecked 
+      ? myChecks.filter(id => id !== postId) 
+      : [...myChecks, postId];
+
+    // UIを即座に更新（楽観的アップデート）
     setMyChecks(newChecks);
 
-    await supabase.from('patrol_status').upsert({
-      user_id: myId,
-      promotion_id: Number(postId),
-      is_favorite: !isChecked
-    }, { onConflict: 'user_id,promotion_id' });
+    if (!isChecked) {
+      // 登録
+      await supabase.from('mylists').insert([{ user_id: myId, promotion_id: Number(postId) }]);
+    } else {
+      // 解除
+      await supabase.from('mylists').delete().eq('user_id', myId).eq('promotion_id', Number(postId));
+    }
   };
 
-  // 💡 巡回済登録 (is_visited) をDBに刻むニャ！
-  const toggleVisited = async (postId: string) => {
-    if (!myId) return;
-    const isVisited = visitedIds.includes(postId);
-    const newVisited = isVisited ? visitedIds.filter(id => id !== postId) : [...visitedIds, postId];
+  const toggleVisited = (postId: string) => {
+    let newVisited = visitedIds.includes(postId) ? visitedIds.filter(id => id !== postId) : [...visitedIds, postId];
     setVisitedIds(newVisited);
-
-    await supabase.from('patrol_status').upsert({
-      user_id: myId,
-      promotion_id: Number(postId),
-      is_visited: !isVisited
-    }, { onConflict: 'user_id,promotion_id' });
+    localStorage.setItem('voca_visited_ids', JSON.stringify(newVisited));
   };
 
-  // ...（uploadImage、handlePostSubmit、PostCard等の共通部分は維持）...
-  // ※紙面の都合上、変更のないUI部分は省略するニャ！
+  const uploadImage = async (file: File, bucketPath: string) => {
+    const fileExt = file.name.split('.').pop();
+    const fileName = `${Math.random()}.${fileExt}`;
+    const filePath = `${bucketPath}/${fileName}`;
+    await supabase.storage.from('images').upload(filePath, file);
+    const { data } = supabase.storage.from('images').getPublicUrl(filePath);
+    return data.publicUrl;
+  };
+
+  const handlePostSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedEventId) { alert("イベントを選択してニャ！"); return; }
+    setLoading(true);
+    try {
+      let finalThumb = '';
+      let finalIcon = '';
+      if (thumbRef.current?.files?.[0]) finalThumb = await uploadImage(thumbRef.current.files[0], 'thumbnails');
+      if (iconRef.current?.files?.[0]) finalIcon = await uploadImage(iconRef.current.files[0], 'icons');
+
+      const { error } = await supabase.from('promotions').insert([{ 
+        song_title: songTitle, video_url: songUrl, repost_url: repostUrl,
+        comment: comment, author_id: myId, thumbnail_url: finalThumb, icon_url: finalIcon,
+        event_id: Number(selectedEventId) 
+      }]);
+
+      if (error) throw error;
+      alert('宣伝完了！✨');
+      setSongTitle(''); setSongUrl(''); setRepostUrl(''); setComment('');
+      await fetchAllPosts(); setActiveTab('list');
+    } catch (error: any) { alert(error.message); } finally { setLoading(false); }
+  };
+
+  const PostCard = ({ post, isMyPage = false }: { post: any, isMyPage?: boolean }) => {
+    const generateXUrl = () => {
+      const text = `${post.song_title} / ${post.app_users?.p_name} さんを視聴したニャ！\n\n#巡ログ #ボカロ`;
+      const targetUrl = post.repost_url || post.video_url;
+      return `https://twitter.com/intent/tweet?text=${encodeURIComponent(text)}&url=${encodeURIComponent(targetUrl)}`;
+    };
+
+    return (
+      <div style={cardStyle}>
+        <div style={{ display: 'flex', gap: '25px', alignItems: 'flex-start' }}>
+          <div style={{ flexShrink: 0 }}>
+            <img src={post.thumbnail_url || DEFAULT_THUMB} style={thumbImgStyle} alt="thumb" />
+          </div>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+              <span style={tagStyle}>{post.events?.event_name || 'イベント名なし'}</span>
+              {post.author_id === myId && (
+                <button onClick={() => { if(confirm('削除する？')) supabase.from('promotions').delete().eq('id', post.id).then(fetchAllPosts); }} style={deleteStyle}>削除</button>
+              )}
+            </div>
+            <h3 style={titleStyle}>{post.song_title}</h3>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '12px' }}>
+              <img src={post.icon_url || DEFAULT_ICON} style={{ width: '24px', height: '24px', borderRadius: '50%', objectFit: 'cover' }} alt="icon" />
+              <span style={{ color: '#666', fontSize: '0.9rem', fontWeight: 'bold' }}>{post.app_users?.p_name}</span>
+            </div>
+            <p style={commentStyle}>{post.comment}</p>
+            <div style={{ display: 'flex', gap: '15px', alignItems: 'center', marginTop: '15px', flexWrap: 'wrap' }}>
+              <a href={post.video_url} target="_blank" rel="noopener noreferrer" style={iconLinkStyle}>📺 視聴</a>
+              <a href={generateXUrl()} target="_blank" rel="noopener noreferrer" style={xBtnStyle}>📢 引用RT</a>
+              {isMyPage ? (
+                <button onClick={() => toggleVisited(post.id)} style={visitBtnStyle(visitedIds.includes(post.id))}>
+                  {visitedIds.includes(post.id) ? '巡回済 ✅' : '未巡回 ⚪'}
+                </button>
+              ) : (
+                <button onClick={() => toggleCheck(post.id.toString())} style={checkBtnStyle(myChecks.includes(post.id.toString()))}>
+                  {myChecks.includes(post.id.toString()) ? '💖 リスト済' : '🤍 リストに追加'}
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  };
 
   return (
-    // UI部分は前回のものをそのまま使ってニャ！
-    // toggleCheck と toggleVisited の呼び出し先が DB 対応になったので、
-    // これでログアウトしてもデータがガブッと残るようになります。
-    <div>（前述の最新UIコードと同じニャß）</div>
+    <div style={{ maxWidth: '700px', margin: '0 auto', padding: '20px', backgroundColor: '#fff', minHeight: '100vh', fontFamily: 'sans-serif' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '30px' }}>
+        <h1 style={{ color: '#0056b3', fontSize: '2.2rem', fontWeight: 'bold', margin: 0 }}>巡ログ <span style={{ fontSize: '1.2rem', fontWeight: 'normal' }}>β</span></h1>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+          <div style={{ textAlign: 'right' }}><div style={{ fontSize: '1rem', color: '#333', fontWeight: 'bold' }}>{pName} さん</div></div>
+          <button onClick={handleLogout} style={logoutBtnStyle}>ログアウト</button>
+        </div>
+      </div>
+
+      <div style={{ display: 'flex', gap: '12px', marginBottom: '15px' }}>
+        <button onClick={() => setActiveTab('list')} style={navBtnStyle(activeTab === 'list')}>全員の作品</button>
+        <button onClick={() => setActiveTab('mypage')} style={navBtnStyle(activeTab === 'mypage')}>マイリスト</button>
+        <button onClick={() => setActiveTab('post')} style={postAddBtnStyle(activeTab === 'post')}>＋ 作品を登録</button>
+      </div>
+
+      {activeTab === 'list' && (
+        <div style={{ display: 'grid', gap: '20px', marginTop: '25px' }}>
+          {allPosts.map(post => <PostCard key={post.id} post={post} />)}
+        </div>
+      )}
+
+      {activeTab === 'mypage' && (
+        <div style={{ display: 'grid', gap: '20px' }}>
+          <div style={{ display: 'flex', gap: '12px', marginBottom: '10px' }}>
+            <div style={counterBoxStyle('#f8f9fa', '#666')}>登録数 <span style={{fontSize: '1.4rem', color: '#0056b3'}}>{allPosts.filter(p => myChecks.includes(p.id.toString())).length}</span></div>
+            <div style={counterBoxStyle('#f0fff4', '#28a745')}>巡回済 <span style={{fontSize: '1.4rem'}}>{allPosts.filter(p => myChecks.includes(p.id.toString()) && visitedIds.includes(p.id.toString())).length}</span></div>
+          </div>
+          {allPosts.filter(p => myChecks.includes(p.id.toString())).map(post => <PostCard key={post.id} post={post} isMyPage={true} />)}
+        </div>
+      )}
+
+      {activeTab === 'post' && (
+        <div style={{ width: '100%', marginTop: '25px' }}>
+          <h2 style={{ textAlign: 'center', marginBottom: '30px', fontSize: '1.2rem' }}>新曲を登録する 🚀</h2>
+          <form onSubmit={handlePostSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '15px' }}>
+            <select value={selectedEventId} onChange={(e) => setSelectedEventId(e.target.value)} style={classicInput}>
+              {isEventLoading ? <option>イベントをロード中...</option> : eventList.map((ev) => (
+                <option key={ev.id} value={ev.id}>{ev.event_name} ({ev.start_date.replace(/-/g, '.')} ~ {ev.end_date.replace(/-/g, '.')})</option>
+              ))}
+            </select>
+            <input type="text" placeholder="曲のタイトル" value={songTitle} onChange={(e) => setSongTitle(e.target.value)} required style={classicInput} />
+            <input type="text" placeholder="ボカロP名" value={inputPName} onChange={(e) => setInputPName(e.target.value)} style={classicInput} />
+            <input type="url" placeholder="動画URL" value={songUrl} onChange={(e) => setSongUrl(e.target.value)} required style={classicInput} />
+            <input type="url" placeholder="リポストURL" value={repostUrl} onChange={(e) => setRepostUrl(e.target.value)} style={classicInput} />
+            <textarea placeholder="一言" value={comment} onChange={(e) => setComment(e.target.value)} style={{ ...classicInput, minHeight: '120px' }} />
+            <div style={{ display: 'flex', gap: '15px' }}>
+              <div style={{ flex: 1 }}><label style={labelStyle}>サムネ</label><input type="file" ref={thumbRef} style={fileInputStyle} /></div>
+              <div style={{ flex: 1 }}><label style={labelStyle}>アイコン</label><input type="file" ref={iconRef} style={fileInputStyle} /></div>
+            </div>
+            <button type="submit" disabled={loading} style={btnStyle('#0d6efd', true)}>{loading ? '送信中...' : '宣伝する！'}</button>
+          </form>
+        </div>
+      )}
+    </div>
   );
 }
+
+// スタイル定義（維持）
+const counterBoxStyle = (bgColor: string, textColor: string) => ({ flex: 1, padding: '15px', borderRadius: '12px', backgroundColor: bgColor, color: textColor, textAlign: 'center' as const, fontSize: '0.9rem', fontWeight: 'bold' as const, border: '1px solid #eee' });
+const visitBtnStyle = (isVisited: boolean) => ({ background: isVisited ? '#e6fffa' : '#f8f9fa', border: isVisited ? '1px solid #38b2ac' : '1px solid #ddd', color: isVisited ? '#38b2ac' : '#666', borderRadius: '8px', padding: '6px 15px', cursor: 'pointer', fontWeight: 'bold' as const, fontSize: '0.9rem' });
+const navBtnStyle = (isActive: boolean) => ({ flex: 1, padding: '14px', borderRadius: '12px', border: '1px solid #ddd', cursor: 'pointer', backgroundColor: isActive ? '#0d6efd' : '#fff', color: isActive ? '#fff' : '#333', fontWeight: 'bold' as const });
+const postAddBtnStyle = (isActive: boolean) => ({ flex: 1, padding: '14px', borderRadius: '12px', border: '1px solid #0d6efd', cursor: 'pointer', backgroundColor: '#fff', color: '#0d6efd', fontWeight: 'bold' as const });
+const cardStyle = { width: '100%', border: '1px solid #eee', padding: '25px', borderRadius: '20px', backgroundColor: '#fff', marginBottom: '20px', boxShadow: '0 4px 12px rgba(0,0,0,0.03)' };
+const thumbImgStyle = { width: '180px', height: '110px', objectFit: 'cover' as const, borderRadius: '12px', backgroundColor: '#f9f9f9' };
+const titleStyle = { fontSize: '1.25rem', margin: '5px 0', color: '#333', fontWeight: 'bold', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' as const };
+const commentStyle = { fontSize: '0.95rem', color: '#555', lineHeight: '1.5', margin: '0', display: '-webkit-box', WebkitLineClamp: '2', WebkitBoxOrient: 'vertical' as const, overflow: 'hidden' };
+const tagStyle = { backgroundColor: '#eef4ff', color: '#0d6efd', padding: '4px 12px', borderRadius: '6px', fontSize: '0.75rem', fontWeight: 'bold' };
+const iconLinkStyle = { textDecoration: 'none', color: '#333', fontWeight: 'bold', fontSize: '0.95rem', display: 'flex', alignItems: 'center', gap: '5px' };
+const checkBtnStyle = (isCheck: boolean) => ({ background: 'none', border: 'none', color: isCheck ? '#e91e63' : '#999', cursor: 'pointer', fontWeight: 'bold', fontSize: '0.95rem', display: 'flex', alignItems: 'center', gap: '5px' });
+const deleteStyle = { color: '#ff4d4f', background: 'none', border: 'none', cursor: 'pointer', fontSize: '0.85rem', fontWeight: 'bold' };
+const logoutBtnStyle = { padding: '8px 18px', borderRadius: '8px', border: '1px solid #ddd', backgroundColor: '#f8f9fa', cursor: 'pointer', fontSize: '0.9rem' };
+const classicInput = { width: '100%', padding: '16px', borderRadius: '12px', border: '2px solid #ddd', fontSize: '1rem', outline: 'none', boxSizing: 'border-box' as const };
+const fileInputStyle = { width: '100%', padding: '12px', borderRadius: '12px', border: '1px solid #eee', fontSize: '0.85rem' };
+const labelStyle = { display: 'block', fontSize: '0.85rem', color: '#666', marginBottom: '6px', fontWeight: 'bold' as const };
+const btnStyle = (color: string, full: boolean) => ({ width: full ? '100%' : 'auto', padding: '16px', backgroundColor: color, color: 'white', border: 'none', borderRadius: '12px', cursor: 'pointer', fontWeight: 'bold', fontSize: '1.1rem', marginTop: '10px' });
+const xBtnStyle = { textDecoration: 'none', backgroundColor: '#000', color: '#fff', padding: '6px 15px', borderRadius: '8px', fontSize: '0.85rem', fontWeight: 'bold' as const, display: 'flex', alignItems: 'center', gap: '5px' };
