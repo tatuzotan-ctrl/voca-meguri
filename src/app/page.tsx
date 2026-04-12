@@ -14,7 +14,10 @@ export default function HomePage() {
   const [myChecks, setMyChecks] = useState<string[]>([]);
   const [visitedIds, setVisitedIds] = useState<string[]>([]);
 
-  const [selectedTag, setSelectedTag] = useState('ボカロ15秒投稿祭 (2026.04.18 ~ 2026.04.18)'); 
+  // 💡 動的なイベントリストのためのステート
+  const [eventList, setEventList] = useState<any[]>([]);
+  const [selectedTag, setSelectedTag] = useState(''); 
+  
   const [inputPName, setInputPName] = useState('');
   const [songTitle, setSongTitle] = useState('');
   const [songUrl, setSongUrl] = useState('');
@@ -29,7 +32,6 @@ export default function HomePage() {
     const userId = localStorage.getItem('voca_user_id');
     const name = localStorage.getItem('voca_p_name');
     
-    // ログインチェック：IDがなければ即ログイン画面へ
     if (!userId) {
       router.push('/login');
       return;
@@ -41,11 +43,29 @@ export default function HomePage() {
     setInputPName(name || '');
     
     fetchAllPosts();
+    fetchActiveEvents(); // 💡 イベント取得を開始
+    
     const savedChecks = localStorage.getItem('voca_my_checks');
     if (savedChecks) setMyChecks(JSON.parse(savedChecks));
     const savedVisited = localStorage.getItem('voca_visited_ids');
     if (savedVisited) setVisitedIds(JSON.parse(savedVisited));
   }, [router]);
+
+  // 💡 投稿祭の一覧を Table (events) から取得する関数
+  const fetchActiveEvents = async () => {
+    const { data, error } = await supabase
+      .from('events')
+      .select('*')
+      .eq('is_active', true)
+      .order('start_date', { ascending: false });
+
+    if (!error && data) {
+      setEventList(data);
+      if (data.length > 0) {
+        setSelectedTag(`${data[0].event_name} (${data[0].start_date} ~ ${data[0].end_date})`);
+      }
+    }
+  };
 
   const fetchAllPosts = async () => {
     const { data, error } = await supabase
@@ -55,11 +75,10 @@ export default function HomePage() {
     if (!error) setAllPosts(data || []);
   };
 
-  // ログアウト処理の修正ニャ！
   const handleLogout = () => {
     localStorage.clear();
     setIsLoggedIn(false);
-    router.push('/login'); // 明示的にログイン画面へ飛ばす
+    router.push('/login');
   };
 
   const toggleCheck = (postId: string) => {
@@ -103,7 +122,6 @@ export default function HomePage() {
     } catch (error: any) { alert(error.message); } finally { setLoading(false); }
   };
 
-  // ログインしていない間は何も表示しない（またはローディング）
   if (!isLoggedIn) return <div style={{textAlign: 'center', marginTop: '50px'}}>リダイレクト中... 🐱</div>;
 
   const PostCard = ({ post, isMyPage = false }: { post: any, isMyPage?: boolean }) => (
@@ -149,7 +167,6 @@ export default function HomePage() {
         <h1 style={{ color: '#0056b3', fontSize: '2.2rem', fontWeight: 'bold', margin: 0 }}>巡ログ <span style={{ fontSize: '1.2rem', fontWeight: 'normal' }}>β</span></h1>
         <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
           <div style={{ textAlign: 'right' }}><div style={{ fontSize: '1rem', color: '#333', fontWeight: 'bold' }}>{pName} さん</div></div>
-          {/* 修正：関数を呼び出すようにしたニャ！ */}
           <button onClick={handleLogout} style={logoutBtnStyle}>ログアウト</button>
         </div>
       </div>
@@ -188,9 +205,17 @@ export default function HomePage() {
         <div style={{ width: '100%', marginTop: '25px' }}>
           <h2 style={{ textAlign: 'center', marginBottom: '30px', fontSize: '1.2rem' }}>新曲を登録する 🚀</h2>
           <form onSubmit={handlePostSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '15px' }}>
-            <select value={selectedTag} onChange={(e) => setSelectedTag(e.target.value)} style={classicInput}>
-              <option value="ボカロ15秒投稿祭 (2026.04.18 ~ 2026.04.18)">ボカロ15秒投稿祭 (2026.04.18 ~ 2026.04.18)</option>
-              <option value="無色透名祭 (2026.11.20 ~ 2026.11.23)">無色透名祭 (2026.11.20 ~ 2026.11.23)</option>
+            <select 
+              value={selectedTag} 
+              onChange={(e) => setSelectedTag(e.target.value)} 
+              style={classicInput}
+            >
+              {/* 💡 DBから取得したリストを回すニャ！ */}
+              {eventList.map((ev) => (
+                <option key={ev.id} value={`${ev.event_name} (${ev.start_date} ~ ${ev.end_date})`}>
+                  {ev.event_name} ({ev.start_date.replace(/-/g, '.')} ~ {ev.end_date.replace(/-/g, '.')})
+                </option>
+              ))}
               <option value="その他">その他 (随時)</option>
             </select>
             <input type="text" placeholder="曲のタイトル" value={songTitle} onChange={(e) => setSongTitle(e.target.value)} required style={classicInput} />
@@ -213,7 +238,7 @@ export default function HomePage() {
   );
 }
 
-// スタイル定義（維持）
+// スタイル定義
 const counterBoxStyle = (bgColor: string, textColor: string) => ({ flex: 1, padding: '15px', borderRadius: '12px', backgroundColor: bgColor, color: textColor, textAlign: 'center' as const, fontSize: '0.9rem', fontWeight: 'bold' as const, border: '1px solid #eee' });
 const visitBtnStyle = (isVisited: boolean) => ({ background: isVisited ? '#e6fffa' : '#f8f9fa', border: isVisited ? '1px solid #38b2ac' : '1px solid #ddd', color: isVisited ? '#38b2ac' : '#666', borderRadius: '8px', padding: '6px 15px', cursor: 'pointer', fontWeight: 'bold' as const, fontSize: '0.9rem', transition: '0.2s' });
 const navBtnStyle = (isActive: boolean) => ({ flex: 1, padding: '14px', borderRadius: '12px', border: '1px solid #ddd', cursor: 'pointer', backgroundColor: isActive ? '#0d6efd' : '#fff', color: isActive ? '#fff' : '#333', fontWeight: 'bold' as const });
