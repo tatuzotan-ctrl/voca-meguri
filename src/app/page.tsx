@@ -20,6 +20,7 @@ export default function HomePage() {
   const [inputPName, setInputPName] = useState('');
   const [songTitle, setSongTitle] = useState('');
   const [songUrl, setSongUrl] = useState('');
+  const [repostUrl, setRepostUrl] = useState(''); // 💡 新規追加
   const [comment, setComment] = useState('');
   const [loading, setLoading] = useState(false);
 
@@ -110,25 +111,26 @@ export default function HomePage() {
       if (iconRef.current?.files?.[0]) finalIcon = await uploadImage(iconRef.current.files[0], 'icons');
 
       const { error } = await supabase.from('promotions').insert([{ 
-        song_title: songTitle, video_url: songUrl, comment: comment,
+        song_title: songTitle, video_url: songUrl, 
+        repost_url: repostUrl, // 💡 新規保存
+        comment: comment,
         author_id: myId, thumbnail_url: finalThumb, icon_url: finalIcon,
-        event_tag: selectedTag // 💡 選択したタグも保存ニャ
+        event_tag: selectedTag 
       }]);
       if (error) throw error;
       alert('宣伝完了！✨');
-      setSongTitle(''); setSongUrl(''); setComment('');
+      setSongTitle(''); setSongUrl(''); setRepostUrl(''); setComment('');
       fetchAllPosts(); setActiveTab('list');
     } catch (error: any) { alert(error.message); } finally { setLoading(false); }
   };
 
-  // 💡 投稿カードコンポーネント
   const PostCard = ({ post, isMyPage = false }: { post: any, isMyPage?: boolean }) => {
     
-    // 💡 XのWeb Intent URLを生成する関数
     const generateXUrl = () => {
       const text = `${post.song_title} / ${post.app_users?.p_name} さんを視聴したニャ！\n\n#巡ログ #ボカロ`;
-      const url = post.video_url;
-      return `https://twitter.com/intent/tweet?text=${encodeURIComponent(text)}&url=${encodeURIComponent(url)}`;
+      // 💡 repost_urlがあればそちらを優先、なければ動画URLを使用
+      const targetUrl = post.repost_url || post.video_url;
+      return `https://twitter.com/intent/tweet?text=${encodeURIComponent(text)}&url=${encodeURIComponent(targetUrl)}`;
     };
 
     return (
@@ -153,7 +155,6 @@ export default function HomePage() {
             <div style={{ display: 'flex', gap: '15px', alignItems: 'center', marginTop: '15px', flexWrap: 'wrap' }}>
               <a href={post.video_url} target="_blank" rel="noopener noreferrer" style={iconLinkStyle}>📺 視聴</a>
               
-              {/* 💡 引用リポストボタンの追加 */}
               <a href={generateXUrl()} target="_blank" rel="noopener noreferrer" style={xBtnStyle}>
                 📢 引用RT
               </a>
@@ -233,6 +234,19 @@ export default function HomePage() {
             <input type="text" placeholder="曲のタイトル" value={songTitle} onChange={(e) => setSongTitle(e.target.value)} required style={classicInput} />
             <input type="text" placeholder="ボカロP名" value={inputPName} onChange={(e) => setInputPName(e.target.value)} style={classicInput} />
             <input type="url" placeholder="動画URL (YouTube/niconico)" value={songUrl} onChange={(e) => setSongUrl(e.target.value)} required style={classicInput} />
+            
+            {/* 💡 追加：リポストして欲しいURL入力欄 */}
+            <input 
+              type="url" 
+              placeholder="リポストして欲しいポストのURL (任意)" 
+              value={repostUrl} 
+              onChange={(e) => setRepostUrl(e.target.value)} 
+              style={{ ...classicInput, border: '1px solid #000' }} 
+            />
+            <p style={{ fontSize: '0.75rem', color: '#666', marginTop: '-10px', paddingLeft: '5px' }}>
+              ※入力すると、引用RTボタンでこのポストが引用されるニャ！
+            </p>
+
             <textarea placeholder="一言コメント" value={comment} onChange={(e) => setComment(e.target.value)} style={{ ...classicInput, minHeight: '120px' }} />
             <div style={{ display: 'flex', gap: '15px' }}>
               <div style={{ flex: 1 }}><label style={labelStyle}>サムネイル画像</label><input type="file" accept="image/*" ref={thumbRef} style={fileInputStyle} /></div>
@@ -250,7 +264,7 @@ export default function HomePage() {
   );
 }
 
-// スタイル定義
+// スタイル定義（省略・変更なし）
 const counterBoxStyle = (bgColor: string, textColor: string) => ({ flex: 1, padding: '15px', borderRadius: '12px', backgroundColor: bgColor, color: textColor, textAlign: 'center' as const, fontSize: '0.9rem', fontWeight: 'bold' as const, border: '1px solid #eee' });
 const visitBtnStyle = (isVisited: boolean) => ({ background: isVisited ? '#e6fffa' : '#f8f9fa', border: isVisited ? '1px solid #38b2ac' : '1px solid #ddd', color: isVisited ? '#38b2ac' : '#666', borderRadius: '8px', padding: '6px 15px', cursor: 'pointer', fontWeight: 'bold' as const, fontSize: '0.9rem', transition: '0.2s' });
 const navBtnStyle = (isActive: boolean) => ({ flex: 1, padding: '14px', borderRadius: '12px', border: '1px solid #ddd', cursor: 'pointer', backgroundColor: isActive ? '#0d6efd' : '#fff', color: isActive ? '#fff' : '#333', fontWeight: 'bold' as const });
@@ -268,17 +282,4 @@ const classicInput = { width: '100%', padding: '16px', borderRadius: '12px', bor
 const fileInputStyle = { width: '100%', padding: '12px', borderRadius: '12px', border: '1px solid #eee', fontSize: '0.85rem' };
 const labelStyle = { display: 'block', fontSize: '0.85rem', color: '#666', marginBottom: '6px', fontWeight: 'bold' as const };
 const btnStyle = (color: string, full: boolean) => ({ width: full ? '100%' : 'auto', padding: '16px', backgroundColor: color, color: 'white', border: 'none', borderRadius: '12px', cursor: 'pointer', fontWeight: 'bold', fontSize: '1.1rem', marginTop: '10px' });
-
-// 💡 追加したXボタンのスタイル
-const xBtnStyle = {
-  textDecoration: 'none',
-  backgroundColor: '#000',
-  color: '#fff',
-  padding: '6px 15px',
-  borderRadius: '8px',
-  fontSize: '0.85rem',
-  fontWeight: 'bold' as const,
-  display: 'flex',
-  alignItems: 'center',
-  cursor: 'pointer'
-};
+const xBtnStyle = { textDecoration: 'none', backgroundColor: '#000', color: '#fff', padding: '6px 15px', borderRadius: '8px', fontSize: '0.85rem', fontWeight: 'bold' as const, display: 'flex', alignItems: 'center', cursor: 'pointer' };
