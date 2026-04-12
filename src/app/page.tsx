@@ -66,6 +66,7 @@ export default function HomePage() {
 
   const fetchActiveEvents = async () => {
     setIsEventLoading(true);
+    // 💡 RLSをEnableにしたので、ポリシーが正しく設定されていないと空で返るニャ！
     const { data, error } = await supabase
       .from('events')
       .select('*')
@@ -82,9 +83,10 @@ export default function HomePage() {
   };
 
   const fetchAllPosts = async () => {
+    // 💡 events!left にすることでイベント未設定でも表示をガードするニャ！
     const { data, error } = await supabase
       .from('promotions')
-      .select('*, app_users ( p_name ), events ( event_name )')
+      .select('*, app_users ( p_name ), events!left ( event_name )')
       .order('created_at', { ascending: false });
     
     if (error) {
@@ -94,8 +96,11 @@ export default function HomePage() {
     }
   };
 
+  // 💡 修正：localStorage.clear() をやめてリストを保護するニャ！
   const handleLogout = () => {
-    localStorage.clear();
+    localStorage.removeItem('voca_user_id');
+    localStorage.removeItem('voca_p_name');
+    // リストデータはあえて残すことで、再ログイン時に復活させるニャ
     setIsLoggedIn(false);
     router.push('/login');
   };
@@ -264,15 +269,7 @@ export default function HomePage() {
             <input type="text" placeholder="曲のタイトル" value={songTitle} onChange={(e) => setSongTitle(e.target.value)} required style={classicInput} />
             <input type="text" placeholder="ボカロP名" value={inputPName} onChange={(e) => setInputPName(e.target.value)} style={classicInput} />
             <input type="url" placeholder="動画URL (YouTube/niconico)" value={songUrl} onChange={(e) => setSongUrl(e.target.value)} required style={classicInput} />
-            
-            {/* 💡 修正：枠線のスタイルを他と合わせて清潔感アップニャ！ */}
-            <input 
-              type="url" 
-              placeholder="リポストして欲しいポストのURL (任意)" 
-              value={repostUrl} 
-              onChange={(e) => setRepostUrl(e.target.value)} 
-              style={classicInput} // 👈 ここを太枠専用スタイルから共通スタイルに変更ニャ！
-            />
+            <input type="url" placeholder="リポストして欲しいポストのURL (任意)" value={repostUrl} onChange={(e) => setRepostUrl(e.target.value)} style={classicInput} />
             <p style={{ fontSize: '0.75rem', color: '#666', marginTop: '-10px', paddingLeft: '5px' }}>※引用RTボタンでこのポストが引用されます。</p>
 
             <textarea placeholder="一言コメント" value={comment} onChange={(e) => setComment(e.target.value)} style={{ ...classicInput, minHeight: '120px' }} />
@@ -296,7 +293,7 @@ export default function HomePage() {
   );
 }
 
-// スタイル定義（維持）
+// スタイル定義
 const counterBoxStyle = (bgColor: string, textColor: string) => ({ flex: 1, padding: '15px', borderRadius: '12px', backgroundColor: bgColor, color: textColor, textAlign: 'center' as const, fontSize: '0.9rem', fontWeight: 'bold' as const, border: '1px solid #eee' });
 const visitBtnStyle = (isVisited: boolean) => ({ background: isVisited ? '#e6fffa' : '#f8f9fa', border: isVisited ? '1px solid #38b2ac' : '1px solid #ddd', color: isVisited ? '#38b2ac' : '#666', borderRadius: '8px', padding: '6px 15px', cursor: 'pointer', fontWeight: 'bold' as const, fontSize: '0.9rem', transition: '0.2s' });
 const navBtnStyle = (isActive: boolean) => ({ flex: 1, padding: '14px', borderRadius: '12px', border: '1px solid #ddd', cursor: 'pointer', backgroundColor: isActive ? '#0d6efd' : '#fff', color: isActive ? '#fff' : '#333', fontWeight: 'bold' as const });
@@ -310,8 +307,8 @@ const iconLinkStyle = { textDecoration: 'none', color: '#333', fontWeight: 'bold
 const checkBtnStyle = (isCheck: boolean) => ({ background: 'none', border: 'none', color: isCheck ? '#e91e63' : '#999', cursor: 'pointer', fontWeight: 'bold', fontSize: '0.95rem', display: 'flex', alignItems: 'center', gap: '5px' });
 const deleteStyle = { color: '#ff4d4f', background: 'none', border: 'none', cursor: 'pointer', fontSize: '0.85rem', fontWeight: 'bold' };
 const logoutBtnStyle = { padding: '8px 18px', borderRadius: '8px', border: '1px solid #ddd', backgroundColor: '#f8f9fa', cursor: 'pointer', fontSize: '0.9rem' };
-const classicInput = { width: '100%', padding: '16px', borderRadius: '12px', border: '2px solid #ddd', fontSize: '1rem', outline: 'none', boxSizing: 'border-box' }; // 💡 这里统一了 box-sizing ニャ
+const classicInput = { width: '100%', padding: '16px', borderRadius: '12px', border: '2px solid #ddd', fontSize: '1rem', outline: 'none', boxSizing: 'border-box' as const };
 const fileInputStyle = { width: '100%', padding: '12px', borderRadius: '12px', border: '1px solid #eee', fontSize: '0.85rem' };
 const labelStyle = { display: 'block', fontSize: '0.85rem', color: '#666', marginBottom: '6px', fontWeight: 'bold' as const };
 const btnStyle = (color: string, full: boolean) => ({ width: full ? '100%' : 'auto', padding: '16px', backgroundColor: color, color: 'white', border: 'none', borderRadius: '12px', cursor: 'pointer', fontWeight: 'bold', fontSize: '1.1rem', marginTop: '10px' });
-const xBtnStyle = { textDecoration: 'none', backgroundColor: '#000', color: '#fff', padding: '6px 15px', borderRadius: '8px', fontSize: '0.85rem', fontWeight: 'bold' as const, display: 'flex', alignItems: 'center', cursor: 'pointer' };
+const xBtnStyle = { textDecoration: 'none', backgroundColor: '#000', color: '#fff', padding: '6px 15px', borderRadius: '8px', fontSize: '0.85rem', fontWeight: 'bold' as const, display: 'flex', alignItems: 'center', gap: '5px' };
