@@ -147,7 +147,6 @@ export default function HomePage() {
         </h1>
         <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
           <div style={{ textAlign: 'right', lineHeight: '1.3' }}>
-            <div style={{ fontSize: '0.7rem', color: '#aaa', fontWeight: 'bold' }}>ID: {myId?.substring(0, 8)}</div>
             <div style={{ fontSize: '0.95rem', color: '#333', fontWeight: 'bold' }}>{pName} さん</div>
           </div>
           <button onClick={() => { localStorage.clear(); window.location.reload(); }} style={logoutBtnStyle}>ログアウト</button>
@@ -204,7 +203,7 @@ export default function HomePage() {
       )}
 
       <div style={{ textAlign: 'center', marginTop: '60px', color: '#bbb', fontSize: '0.8rem' }}>
-        © 2026 巡ログ Project / {pName}
+        © 2026 巡ログ Project / 猫ヶ丘ガブリ
       </div>
     </div>
   );
