@@ -62,22 +62,27 @@ export default function HomePage() {
     // 1. まず mylists から自分の登録曲を全取得
     const { data: listData, error: listError } = await supabase
       .from('mylists')
-      .select('promotion_id')
+      .select('id, promotion_id')
       .eq('user_id', userId);
 
     if (!listError && listData) {
       const pIds = listData.map(d => d.promotion_id.toString());
       setMyChecks(pIds);
 
-      // 2. その曲たちの中から patrol_status が is_visited のものを取得
+      // 2. 作成された mylist_id を元に patrol_status から巡回済を抽出
+      const mylistIds = listData.map(d => d.id);
       const { data: statusData, error: statusError } = await supabase
         .from('patrol_status')
-        .select('promotion_id')
+        .select('mylists(promotion_id)')
         .eq('is_visited', true)
-        .in('promotion_id', listData.map(d => d.promotion_id));
+        .in('mylist_id', mylistIds);
 
       if (!statusError && statusData) {
-        setVisitedIds(statusData.map(d => d.promotion_id.toString()));
+        // ネストされた promotion_id をフラットな配列にするニャ
+        const vIds = statusData
+          .map((d: any) => d.mylists?.promotion_id?.toString())
+          .filter(Boolean);
+        setVisitedIds(vIds);
       }
     }
   };
@@ -111,30 +116,49 @@ export default function HomePage() {
     router.push('/login');
   };
 
-  // 💡 マイリスト登録（mylistsテーブルへの保存）
+  // 💡 マイリスト登録（mylists登録 + patrol_status初期化）
   const toggleCheck = async (postId: string) => {
     if (!myId) return;
     const isChecked = myChecks.includes(postId);
-    const newChecks = isChecked ? myChecks.filter(id => id !== postId) : [...myChecks, postId];
-    setMyChecks(newChecks);
-
+    
     if (!isChecked) {
-      await supabase.from('mylists').insert([{ user_id: myId, promotion_id: Number(postId) }]);
+      // 楽観的アップデート
+      setMyChecks([...myChecks, postId]);
+
+      // 1. mylists に親レコードを作成
+      const { data: newList, error: listError } = await supabase
+        .from('mylists')
+        .insert([{ user_id: myId, promotion_id: Number(postId) }])
+        .select()
+        .single();
+
+      if (!listError && newList) {
+        // 2. 子レコードの patrol_status を作成
+        await supabase.from('patrol_status').insert([{
+          mylist_id: newList.id,
+          is_visited: false
+        }]);
+      }
     } else {
-      await supabase.from('mylists').delete().eq('user_id', myId).eq('promotion_id', Number(postId));
-      // マイリストから消えたら巡回ステータスも消えるのが自然ニャ
+      // 削除処理
+      setMyChecks(myChecks.filter(id => id !== postId));
       setVisitedIds(prev => prev.filter(id => id !== postId));
+      
+      await supabase.from('mylists').delete().eq('user_id', myId).eq('promotion_id', Number(postId));
+      // CASCADE設定により、子の patrol_status も自動で消えるニャ！
     }
   };
 
-  // 💡 巡回ステータス更新（patrol_statusテーブルへの保存）
+  // 💡 巡回ステータス更新（patrol_statusの更新）
   const toggleVisited = async (postId: string) => {
     if (!myId) return;
     const isVisited = visitedIds.includes(postId);
+    
+    // UIを即座に更新
     const newVisited = isVisited ? visitedIds.filter(id => id !== postId) : [...visitedIds, postId];
     setVisitedIds(newVisited);
 
-    // mylistsのIDを特定するためにまず参照
+    // 親の mylist_id を特定
     const { data: mylist } = await supabase
       .from('mylists')
       .select('id')
@@ -288,7 +312,7 @@ export default function HomePage() {
   );
 }
 
-// --- スタイル定義（昨夜のものを維持） ---
+// --- スタイル定義 ---
 const counterBoxStyle = (bgColor: string, textColor: string) => ({ flex: 1, padding: '15px', borderRadius: '12px', backgroundColor: bgColor, color: textColor, textAlign: 'center' as const, fontSize: '0.9rem', fontWeight: 'bold' as const, border: '1px solid #eee' });
 const visitBtnStyle = (isVisited: boolean) => ({ background: isVisited ? '#e6fffa' : '#f8f9fa', border: isVisited ? '1px solid #38b2ac' : '1px solid #ddd', color: isVisited ? '#38b2ac' : '#666', borderRadius: '8px', padding: '6px 15px', cursor: 'pointer', fontWeight: 'bold' as const, fontSize: '0.9rem' });
 const navBtnStyle = (isActive: boolean) => ({ flex: 1, padding: '14px', borderRadius: '12px', border: '1px solid #ddd', cursor: 'pointer', backgroundColor: isActive ? '#0d6efd' : '#fff', color: isActive ? '#fff' : '#333', fontWeight: 'bold' as const });

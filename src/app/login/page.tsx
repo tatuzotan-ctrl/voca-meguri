@@ -27,7 +27,7 @@ export default function LoginPage() {
       localStorage.setItem('voca_user_id', user.id);
       localStorage.setItem('voca_p_name', user.p_name);
       
-      alert('ログイン成功ニャ！🐱');
+
       router.push('/');
     } catch (error: any) {
       alert('エラーニャ： ' + error.message);
