@@ -11,7 +11,7 @@ export default function HomePage() {
   const [pName, setPName] = useState('');
   
   const [allPosts, setAllPosts] = useState<any[]>([]);
-  const [myChecks, setMyChecks] = useState<string[]>([]); // チェックした投稿IDリスト
+  const [myChecks, setMyChecks] = useState<string[]>([]);
 
   // フォーム用ステート
   const [selectedTag, setSelectedTag] = useState('ボカロ15秒投稿祭 (2026.04.18 ~ 2026.04.18)'); 
@@ -35,11 +35,8 @@ export default function HomePage() {
       setInputPName(name || '');
     }
     fetchAllPosts();
-    // ローカルストレージからチェック情報を復元
     const savedChecks = localStorage.getItem('voca_my_checks');
-    if (savedChecks) {
-      setMyChecks(JSON.parse(savedChecks));
-    }
+    if (savedChecks) setMyChecks(JSON.parse(savedChecks));
   }, []);
 
   const fetchAllPosts = async () => {
@@ -50,14 +47,8 @@ export default function HomePage() {
     if (!error) setAllPosts(data || []);
   };
 
-  // チェックボタンの切り替えロジック
   const toggleCheck = (postId: string) => {
-    let newChecks;
-    if (myChecks.includes(postId)) {
-      newChecks = myChecks.filter(id => id !== postId);
-    } else {
-      newChecks = [...myChecks, postId];
-    }
+    let newChecks = myChecks.includes(postId) ? myChecks.filter(id => id !== postId) : [...myChecks, postId];
     setMyChecks(newChecks);
     localStorage.setItem('voca_my_checks', JSON.stringify(newChecks));
   };
@@ -91,42 +82,79 @@ export default function HomePage() {
     } catch (error: any) { alert(error.message); } finally { setLoading(false); }
   };
 
-  if (!isLoggedIn) return (
-    <div style={{ textAlign: 'center', marginTop: '100px' }}>
-      <button onClick={() => router.push('/login')} style={btnStyle('#0070f3', true)}>ログイン</button>
+  if (!isLoggedIn) return null;
+
+  // 投稿カードの共通コンポーネント（幅を統一するため）
+  const PostCard = ({ post }: { post: any }) => (
+    <div style={cardStyle}>
+      <div style={{ display: 'flex', gap: '25px', alignItems: 'flex-start' }}>
+        {/* サムネイル画像（サイズを180x110に固定） */}
+        <div style={{ flexShrink: 0 }}>
+          <img 
+            src={post.thumbnail_url || 'https://via.placeholder.com/180x110?text=No+Image'} 
+            style={thumbImgStyle} 
+            alt="thumb" 
+          />
+        </div>
+        
+        {/* テキストコンテンツエリア */}
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+            <span style={tagStyle}>ボカロ15秒投稿祭</span>
+            {post.author_id === myId && (
+              <button 
+                onClick={() => { if(confirm('削除する？')) supabase.from('promotions').delete().eq('id', post.id).then(fetchAllPosts); }} 
+                style={deleteStyle}
+              >
+                削除
+              </button>
+            )}
+          </div>
+          
+          <h3 style={titleStyle}>{post.song_title}</h3>
+          
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '12px' }}>
+            <img 
+              src={post.icon_url || 'https://via.placeholder.com/24'} 
+              style={{ width: '24px', height: '24px', borderRadius: '50%', objectFit: 'cover' }} 
+              alt="icon" 
+            />
+            <span style={{ color: '#666', fontSize: '0.9rem', fontWeight: 'bold' }}>{post.app_users?.p_name}</span>
+          </div>
+          
+          <p style={commentStyle}>{post.comment}</p>
+          
+          <div style={{ display: 'flex', gap: '25px', alignItems: 'center', marginTop: '15px' }}>
+            <a href={post.video_url} target="_blank" rel="noopener noreferrer" style={iconLinkStyle}>
+              📺 視聴
+            </a>
+            <button onClick={() => toggleCheck(post.id)} style={checkBtnStyle(myChecks.includes(post.id))}>
+              {myChecks.includes(post.id) ? '💖 リスト済' : '🤍 リストに追加'}
+            </button>
+          </div>
+        </div>
+      </div>
     </div>
   );
 
   return (
     <div style={{ maxWidth: '700px', margin: '0 auto', padding: '20px', backgroundColor: '#fff', minHeight: '100vh', fontFamily: 'sans-serif' }}>
       
-      {/* --- ヘッダー領域（画像を削除してスッキリ） --- */}
-{/* --- ヘッダー領域 --- */}
+      {/* --- ヘッダー領域 --- */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '30px' }}>
         <h1 style={{ color: '#0056b3', fontSize: '2.2rem', fontWeight: 'bold', margin: 0 }}>
           巡ログ <span style={{ fontSize: '1.2rem', fontWeight: 'normal' }}>β</span>
         </h1>
-        
-        {/* gap を 20px → 12px に縮めてボタンに寄せました */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-          
-          {/* ログインIDとP名の表示エリア */}
           <div style={{ textAlign: 'right', lineHeight: '1.3' }}>
-            <div style={{ fontSize: '0.95rem', color: '#333', fontWeight: 'bold' }}>
-              {pName} <span style={{ fontSize: '0.8rem', fontWeight: 'normal' }}>さん</span>
-            </div>
+            <div style={{ fontSize: '0.7rem', color: '#aaa', fontWeight: 'bold' }}>ID: {myId?.substring(0, 8)}</div>
+            <div style={{ fontSize: '0.95rem', color: '#333', fontWeight: 'bold' }}>{pName} さん</div>
           </div>
-          
-          <button 
-            onClick={() => { localStorage.clear(); window.location.reload(); }} 
-            style={logoutBtnStyle}
-          >
-            ログアウト
-          </button>
+          <button onClick={() => { localStorage.clear(); window.location.reload(); }} style={logoutBtnStyle}>ログアウト</button>
         </div>
       </div>
 
-      {/* --- メインタブ：全ボタンを flex:1 で均等幅に --- */}
+      {/* --- メインタブ --- */}
       <div style={{ display: 'flex', gap: '12px', marginBottom: '40px' }}>
         <button onClick={() => setActiveTab('list')} style={navBtnStyle(activeTab === 'list')}>全員の作品</button>
         <button onClick={() => setActiveTab('mypage')} style={navBtnStyle(activeTab === 'mypage')}>マイリスト</button>
@@ -136,76 +164,31 @@ export default function HomePage() {
       {/* --- 全員の作品タブ --- */}
       {activeTab === 'list' && (
         <div style={{ display: 'grid', gap: '20px' }}>
-          {allPosts.map(post => (
-            <div key={post.id} style={cardStyle}>
-              <div style={{ display: 'flex', gap: '20px' }}>
-                <img src={post.thumbnail_url || 'https://via.placeholder.com/180x110'} style={thumbImgStyle} />
-                <div style={{ flex: 1 }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                    <span style={tagStyle}>ボカロ15秒投稿祭</span>
-                    {post.author_id === myId && <button onClick={() => {if(confirm('削除する？')) supabase.from('promotions').delete().eq('id', post.id).then(fetchAllPosts)}} style={deleteStyle}>削除</button>}
-                  </div>
-                  <h3 style={{ fontSize: '1.2rem', margin: '5px 0' }}>{post.song_title}</h3>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '10px' }}>
-                    <img src={post.icon_url || 'https://via.placeholder.com/24'} style={{ width: '24px', height: '24px', borderRadius: '50%' }} />
-                    <span style={{ color: '#666', fontSize: '0.9rem' }}>{post.app_users?.p_name}</span>
-                  </div>
-                  <p style={{ fontSize: '0.95rem', color: '#444', marginBottom: '15px' }}>{post.comment}</p>
-                  <div style={{ display: 'flex', gap: '20px', alignItems: 'center' }}>
-                    <a href={post.video_url} target="_blank" style={iconLinkStyle}>📺 視聴</a>
-                    <button onClick={() => toggleCheck(post.id)} style={checkBtnStyle(myChecks.includes(post.id))}>
-                      {myChecks.includes(post.id) ? '💖 リスト済' : '🤍 リストに追加'}
-                    </button>
-                  </div>
-                </div>
-              </div>
-            </div>
-          ))}
+          {allPosts.map(post => <PostCard key={post.id} post={post} />)}
         </div>
       )}
 
-      {/* --- マイリストタブ（修正：確実に表示されるように抽出） --- */}
+      {/* --- マイリストタブ --- */}
       {activeTab === 'mypage' && (
         <div style={{ display: 'grid', gap: '20px' }}>
-          <h2 style={{ fontSize: '1.2rem', marginBottom: '10px' }}>マイリスト 💖</h2>
+          <h2 style={{ fontSize: '1.2rem', marginBottom: '10px', color: '#333' }}>マイリスト 💖</h2>
           {allPosts.filter(p => myChecks.includes(p.id)).length > 0 ? (
-            allPosts.filter(p => myChecks.includes(p.id)).map(post => (
-              <div key={post.id} style={cardStyle}>
-                <div style={{ display: 'flex', gap: '20px' }}>
-                  <img src={post.thumbnail_url || 'https://via.placeholder.com/180x110'} style={thumbImgStyle} />
-                  <div style={{ flex: 1 }}>
-                    <h3 style={{ fontSize: '1.2rem', margin: '5px 0' }}>{post.song_title}</h3>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '10px' }}>
-                      <img src={post.icon_url || 'https://via.placeholder.com/24'} style={{ width: '24px', height: '24px', borderRadius: '50%' }} />
-                      <span style={{ color: '#666', fontSize: '0.9rem' }}>{post.app_users?.p_name}</span>
-                    </div>
-                    <div style={{ display: 'flex', gap: '20px', alignItems: 'center' }}>
-                      <a href={post.video_url} target="_blank" style={iconLinkStyle}>📺 視聴</a>
-                      <button onClick={() => toggleCheck(post.id)} style={checkBtnStyle(true)}>
-                        💖 リスト済（解除）
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            ))
+            allPosts.filter(p => myChecks.includes(p.id)).map(post => <PostCard key={post.id} post={post} />)
           ) : (
-            <p style={{ textAlign: 'center', color: '#999', marginTop: '40px' }}>リストに登録された作品はありません。🤍をタップして追加してね！</p>
+            <p style={{ textAlign: 'center', color: '#999', marginTop: '40px' }}>リストに登録された作品はありません。</p>
           )}
         </div>
       )}
 
       {/* --- 作品登録タブ --- */}
       {activeTab === 'post' && (
-        <div style={{ padding: '0 10px' }}>
-          <h2 style={{ textAlign: 'center', marginBottom: '30px', fontSize: '1.2rem' }}>新曲を登録する 🚀</h2>
+        <div style={{ width: '100%' }}>
+          <h2 style={{ textAlign: 'center', marginBottom: '30px', fontSize: '1.2rem', color: '#333' }}>新曲を登録する 🚀</h2>
           <form onSubmit={handlePostSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '15px' }}>
             <select value={selectedTag} onChange={(e) => setSelectedTag(e.target.value)} style={classicInput}>
               <option value="ボカロ15秒投稿祭 (2026.04.18 ~ 2026.04.18)">ボカロ15秒投稿祭 (2026.04.18 ~ 2026.04.18)</option>
               <option value="無色透名祭 (2026.11.20 ~ 2026.11.23)">無色透名祭 (2026.11.20 ~ 2026.11.23)</option>
-              <option value="ボカコレ2026冬 (2026.02.19 ~ 2026.02.23)">ボカコレ2026冬 (2026.02.19 ~ 2026.02.23)</option>
-              <option value="ボカコレ2026夏 (2026.08.20 ~ 2026.08.24)">ボカコレ2026夏 (2026.08.20 ~ 2026.08.24)</option>
-              <option value="その他 (随時)">その他 (随時)</option>
+              <option value="その他">その他 (随時)</option>
             </select>
             <input type="text" placeholder="曲のタイトル" value={songTitle} onChange={(e) => setSongTitle(e.target.value)} required style={classicInput} />
             <input type="text" placeholder="ボカロP名" value={inputPName} onChange={(e) => setInputPName(e.target.value)} style={classicInput} />
@@ -220,25 +203,36 @@ export default function HomePage() {
         </div>
       )}
 
-      {/* --- フッター --- */}
-      <div style={{ textAlign: 'center', marginTop: '60px', color: '#999', fontSize: '0.85rem' }}>
-        © 2026 巡ログ Project / 猫ヶ丘ガブリ
+      <div style={{ textAlign: 'center', marginTop: '60px', color: '#bbb', fontSize: '0.8rem' }}>
+        © 2026 巡ログ Project / {pName}
       </div>
     </div>
   );
 }
 
-// --- スタイル定義 ---
-const navBtnStyle = (isActive: boolean) => ({ flex: 1, padding: '14px', borderRadius: '12px', border: '1px solid #ddd', cursor: 'pointer', backgroundColor: isActive ? '#0d6efd' : '#fff', color: isActive ? '#fff' : '#333', fontWeight: 'bold' as const, fontSize: '1rem' });
-const postAddBtnStyle = (isActive: boolean) => ({ flex: 1, padding: '14px', borderRadius: '12px', border: '1px solid #0d6efd', cursor: 'pointer', backgroundColor: '#fff', color: '#0d6efd', fontWeight: 'bold' as const, fontSize: '1rem' });
-const cardStyle = { border: '1px solid #eee', padding: '25px', borderRadius: '20px', backgroundColor: '#fff', marginBottom: '20px' };
-const thumbImgStyle = { width: '180px', height: '110px', objectFit: 'cover' as const, borderRadius: '12px' };
-const tagStyle = { backgroundColor: '#eef4ff', color: '#0d6efd', padding: '4px 12px', borderRadius: '5px', fontSize: '0.75rem', fontWeight: 'bold' };
-const iconLinkStyle = { textDecoration: 'none', color: '#0d6efd', fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: '5px' };
-const checkBtnStyle = (isCheck: boolean) => ({ background: 'none', border: 'none', color: isCheck ? '#e91e63' : '#666', cursor: 'pointer', fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: '5px' });
-const deleteStyle = { color: '#ff4d4f', background: 'none', border: 'none', cursor: 'pointer', fontSize: '0.85rem' };
-const logoutBtnStyle = { padding: '8px 18px', borderRadius: '8px', border: '1px solid #ddd', backgroundColor: '#f8f9fa', cursor: 'pointer', fontSize: '0.95rem' };
-const classicInput = { width: '100%', padding: '16px', borderRadius: '12px', border: '1px solid #ccc', fontSize: '1.05rem', outline: 'none' };
+// --- スタイル定義（幅を 100% = 700px に統一） ---
+const navBtnStyle = (isActive: boolean) => ({ flex: 1, padding: '14px', borderRadius: '12px', border: '1px solid #ddd', cursor: 'pointer', backgroundColor: isActive ? '#0d6efd' : '#fff', color: isActive ? '#fff' : '#333', fontWeight: 'bold' as const });
+const postAddBtnStyle = (isActive: boolean) => ({ flex: 1, padding: '14px', borderRadius: '12px', border: '1px solid #0d6efd', cursor: 'pointer', backgroundColor: '#fff', color: '#0d6efd', fontWeight: 'bold' as const });
+
+const cardStyle = { 
+  width: '100%', // 入力ボックスと同じ幅に
+  border: '1px solid #eee', 
+  padding: '25px', 
+  borderRadius: '20px', 
+  backgroundColor: '#fff', 
+  marginBottom: '20px',
+  boxShadow: '0 4px 12px rgba(0,0,0,0.03)' 
+};
+
+const thumbImgStyle = { width: '180px', height: '110px', objectFit: 'cover' as const, borderRadius: '12px', backgroundColor: '#f9f9f9' };
+const titleStyle = { fontSize: '1.25rem', margin: '5px 0', color: '#333', fontWeight: 'bold', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' as const };
+const commentStyle = { fontSize: '0.95rem', color: '#555', lineHeight: '1.5', margin: '0', display: '-webkit-box', WebkitLineClamp: '2', WebkitBoxOrient: 'vertical' as const, overflow: 'hidden' };
+const tagStyle = { backgroundColor: '#eef4ff', color: '#0d6efd', padding: '4px 12px', borderRadius: '6px', fontSize: '0.75rem', fontWeight: 'bold' };
+const iconLinkStyle = { textDecoration: 'none', color: '#333', fontWeight: 'bold', fontSize: '0.95rem', display: 'flex', alignItems: 'center', gap: '5px' };
+const checkBtnStyle = (isCheck: boolean) => ({ background: 'none', border: 'none', color: isCheck ? '#e91e63' : '#999', cursor: 'pointer', fontWeight: 'bold', fontSize: '0.95rem', display: 'flex', alignItems: 'center', gap: '5px' });
+const deleteStyle = { color: '#ff4d4f', background: 'none', border: 'none', cursor: 'pointer', fontSize: '0.85rem', fontWeight: 'bold' };
+const logoutBtnStyle = { padding: '8px 18px', borderRadius: '8px', border: '1px solid #ddd', backgroundColor: '#f8f9fa', cursor: 'pointer', fontSize: '0.9rem' };
+const classicInput = { width: '100%', padding: '16px', borderRadius: '12px', border: '1px solid #ccc', fontSize: '1rem', outline: 'none' };
 const fileInputStyle = { width: '100%', padding: '12px', borderRadius: '12px', border: '1px solid #eee', fontSize: '0.85rem' };
 const labelStyle = { display: 'block', fontSize: '0.85rem', color: '#666', marginBottom: '6px', fontWeight: 'bold' as const };
-const btnStyle = (color: string, full: boolean) => ({ width: full ? '100%' : 'auto', padding: '16px', backgroundColor: color, color: 'white', border: 'none', borderRadius: '12px', cursor: 'pointer', fontWeight: 'bold', fontSize: '1.1rem', marginTop: '15px' });
+const btnStyle = (color: string, full: boolean) => ({ width: full ? '100%' : 'auto', padding: '16px', backgroundColor: color, color: 'white', border: 'none', borderRadius: '12px', cursor: 'pointer', fontWeight: 'bold', fontSize: '1.1rem', marginTop: '10px' });
