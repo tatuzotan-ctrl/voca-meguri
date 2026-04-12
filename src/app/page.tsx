@@ -84,11 +84,10 @@ export default function HomePage() {
 
   if (!isLoggedIn) return null;
 
-  // 投稿カードの共通コンポーネント（幅を統一するため）
+  // 投稿カードの共通コンポーネント
   const PostCard = ({ post }: { post: any }) => (
     <div style={cardStyle}>
       <div style={{ display: 'flex', gap: '25px', alignItems: 'flex-start' }}>
-        {/* サムネイル画像（サイズを180x110に固定） */}
         <div style={{ flexShrink: 0 }}>
           <img 
             src={post.thumbnail_url || 'https://via.placeholder.com/180x110?text=No+Image'} 
@@ -96,8 +95,6 @@ export default function HomePage() {
             alt="thumb" 
           />
         </div>
-        
-        {/* テキストコンテンツエリア */}
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
             <span style={tagStyle}>ボカロ15秒投稿祭</span>
@@ -110,9 +107,7 @@ export default function HomePage() {
               </button>
             )}
           </div>
-          
           <h3 style={titleStyle}>{post.song_title}</h3>
-          
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '12px' }}>
             <img 
               src={post.icon_url || 'https://via.placeholder.com/24'} 
@@ -121,9 +116,7 @@ export default function HomePage() {
             />
             <span style={{ color: '#666', fontSize: '0.9rem', fontWeight: 'bold' }}>{post.app_users?.p_name}</span>
           </div>
-          
           <p style={commentStyle}>{post.comment}</p>
-          
           <div style={{ display: 'flex', gap: '25px', alignItems: 'center', marginTop: '15px' }}>
             <a href={post.video_url} target="_blank" rel="noopener noreferrer" style={iconLinkStyle}>
               📺 視聴
@@ -140,14 +133,14 @@ export default function HomePage() {
   return (
     <div style={{ maxWidth: '700px', margin: '0 auto', padding: '20px', backgroundColor: '#fff', minHeight: '100vh', fontFamily: 'sans-serif' }}>
       
-      {/* --- ヘッダー領域 --- */}
+      {/* --- ヘッダー領域（IDを削除して名前のみに集約） --- */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '30px' }}>
         <h1 style={{ color: '#0056b3', fontSize: '2.2rem', fontWeight: 'bold', margin: 0 }}>
           巡ログ <span style={{ fontSize: '1.2rem', fontWeight: 'normal' }}>β</span>
         </h1>
         <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-          <div style={{ textAlign: 'right', lineHeight: '1.3' }}>
-            <div style={{ fontSize: '0.95rem', color: '#333', fontWeight: 'bold' }}>{pName} さん</div>
+          <div style={{ textAlign: 'right' }}>
+            <div style={{ fontSize: '1rem', color: '#333', fontWeight: 'bold' }}>{pName} さん</div>
           </div>
           <button onClick={() => { localStorage.clear(); window.location.reload(); }} style={logoutBtnStyle}>ログアウト</button>
         </div>
@@ -160,14 +153,13 @@ export default function HomePage() {
         <button onClick={() => setActiveTab('post')} style={postAddBtnStyle(activeTab === 'post')}>＋ 作品を登録</button>
       </div>
 
-      {/* --- 全員の作品タブ --- */}
+      {/* --- コンテンツ --- */}
       {activeTab === 'list' && (
         <div style={{ display: 'grid', gap: '20px' }}>
           {allPosts.map(post => <PostCard key={post.id} post={post} />)}
         </div>
       )}
 
-      {/* --- マイリストタブ --- */}
       {activeTab === 'mypage' && (
         <div style={{ display: 'grid', gap: '20px' }}>
           <h2 style={{ fontSize: '1.2rem', marginBottom: '10px', color: '#333' }}>マイリスト 💖</h2>
@@ -179,7 +171,6 @@ export default function HomePage() {
         </div>
       )}
 
-      {/* --- 作品登録タブ --- */}
       {activeTab === 'post' && (
         <div style={{ width: '100%' }}>
           <h2 style={{ textAlign: 'center', marginBottom: '30px', fontSize: '1.2rem', color: '#333' }}>新曲を登録する 🚀</h2>
@@ -202,27 +193,18 @@ export default function HomePage() {
         </div>
       )}
 
+      {/* --- フッター（コピーライト修正） --- */}
       <div style={{ textAlign: 'center', marginTop: '60px', color: '#bbb', fontSize: '0.8rem' }}>
-        © 2026 巡ログ Project / 猫ヶ丘ガブリ
+        © 2026 巡ログ Project / {pName}
       </div>
     </div>
   );
 }
 
-// --- スタイル定義（幅を 100% = 700px に統一） ---
+// --- スタイル定義 ---
 const navBtnStyle = (isActive: boolean) => ({ flex: 1, padding: '14px', borderRadius: '12px', border: '1px solid #ddd', cursor: 'pointer', backgroundColor: isActive ? '#0d6efd' : '#fff', color: isActive ? '#fff' : '#333', fontWeight: 'bold' as const });
 const postAddBtnStyle = (isActive: boolean) => ({ flex: 1, padding: '14px', borderRadius: '12px', border: '1px solid #0d6efd', cursor: 'pointer', backgroundColor: '#fff', color: '#0d6efd', fontWeight: 'bold' as const });
-
-const cardStyle = { 
-  width: '100%', // 入力ボックスと同じ幅に
-  border: '1px solid #eee', 
-  padding: '25px', 
-  borderRadius: '20px', 
-  backgroundColor: '#fff', 
-  marginBottom: '20px',
-  boxShadow: '0 4px 12px rgba(0,0,0,0.03)' 
-};
-
+const cardStyle = { width: '100%', border: '1px solid #eee', padding: '25px', borderRadius: '20px', backgroundColor: '#fff', marginBottom: '20px', boxShadow: '0 4px 12px rgba(0,0,0,0.03)' };
 const thumbImgStyle = { width: '180px', height: '110px', objectFit: 'cover' as const, borderRadius: '12px', backgroundColor: '#f9f9f9' };
 const titleStyle = { fontSize: '1.25rem', margin: '5px 0', color: '#333', fontWeight: 'bold', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' as const };
 const commentStyle = { fontSize: '0.95rem', color: '#555', lineHeight: '1.5', margin: '0', display: '-webkit-box', WebkitLineClamp: '2', WebkitBoxOrient: 'vertical' as const, overflow: 'hidden' };
