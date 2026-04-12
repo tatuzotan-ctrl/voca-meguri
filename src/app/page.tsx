@@ -11,10 +11,9 @@ export default function HomePage() {
   const [pName, setPName] = useState('');
   
   const [allPosts, setAllPosts] = useState<any[]>([]);
-  const [myChecks, setMyChecks] = useState<string[]>([]);
+  const [myChecks, setMyChecks] = useState<string[]>([]); // promotion_idの配列
   const [visitedIds, setVisitedIds] = useState<string[]>([]);
 
-  // 投稿祭の一覧管理
   const [eventList, setEventList] = useState<any[]>([]);
   const [selectedEventId, setSelectedEventId] = useState<string>(''); 
   const [isEventLoading, setIsEventLoading] = useState(true);
@@ -30,13 +29,11 @@ export default function HomePage() {
   const thumbRef = useRef<HTMLInputElement>(null);
   const iconRef = useRef<HTMLInputElement>(null);
 
-  // デフォルト画像
   const DEFAULT_THUMB = '/images/listen-me.png'; 
   const DEFAULT_ICON = '/images/default-cat-p.png';
 
   useEffect(() => {
     const init = async () => {
-      // 1. ログインチェック
       const userId = localStorage.getItem('voca_user_id');
       const name = localStorage.getItem('voca_p_name');
       
@@ -50,23 +47,32 @@ export default function HomePage() {
       setPName(name || 'ボカロP');
       setInputPName(name || '');
 
-      // 2. データの取得
       await Promise.all([
         fetchActiveEvents(),
-        fetchAllPosts()
+        fetchAllPosts(),
+        fetchMyList(userId), // 💡 ログイン時にDBからリストをロード
       ]);
       
-      const savedChecks = localStorage.getItem('voca_my_checks');
-      if (savedChecks) setMyChecks(JSON.parse(savedChecks));
       const savedVisited = localStorage.getItem('voca_visited_ids');
       if (savedVisited) setVisitedIds(JSON.parse(savedVisited));
     };
     init();
   }, [router]);
 
+  // 💡 DBからマイリストを取得するニャ
+  const fetchMyList = async (userId: string) => {
+    const { data, error } = await supabase
+      .from('mylists')
+      .select('promotion_id')
+      .eq('user_id', userId);
+
+    if (!error && data) {
+      setMyChecks(data.map(item => item.promotion_id.toString()));
+    }
+  };
+
   const fetchActiveEvents = async () => {
     setIsEventLoading(true);
-    // 💡 RLSをEnableにしたので、ポリシーが正しく設定されていないと空で返るニャ！
     const { data, error } = await supabase
       .from('events')
       .select('*')
@@ -75,46 +81,51 @@ export default function HomePage() {
 
     if (!error && data) {
       setEventList(data);
-      if (data.length > 0) {
-        setSelectedEventId(data[0].id.toString());
-      }
+      if (data.length > 0) setSelectedEventId(data[0].id.toString());
     }
     setIsEventLoading(false);
   };
 
   const fetchAllPosts = async () => {
-    // 💡 events!left にすることでイベント未設定でも表示をガードするニャ！
     const { data, error } = await supabase
       .from('promotions')
       .select('*, app_users ( p_name ), events!left ( event_name )')
       .order('created_at', { ascending: false });
-    
-    if (error) {
-      console.error("Fetch Posts Error:", error);
-    } else {
-      setAllPosts(data || []);
-    }
+    if (!error) setAllPosts(data || []);
   };
 
-  // 💡 修正：localStorage.clear() をやめてリストを保護するニャ！
   const handleLogout = () => {
     localStorage.removeItem('voca_user_id');
     localStorage.removeItem('voca_p_name');
-    // リストデータはあえて残すことで、再ログイン時に復活させるニャ
     setIsLoggedIn(false);
     router.push('/login');
   };
 
-  const toggleCheck = (postId: string) => {
-    let newChecks = myChecks.includes(postId) ? myChecks.filter(id => id !== postId) : [...myChecks, postId];
+  // 💡 修正：DB（mylistsテーブル）と同期するトグル処理
+  const toggleCheck = async (postId: string) => {
+    if (!myId) return;
+
+    const isChecked = myChecks.includes(postId);
+    const newChecks = isChecked 
+      ? myChecks.filter(id => id !== postId) 
+      : [...myChecks, postId];
+
+    // UIを即座に更新（楽観的アップデート）
     setMyChecks(newChecks);
-    localStorage.setItem('voca_my_checks', JSON.stringify(newChecks));
+
+    if (!isChecked) {
+      // 登録
+      await supabase.from('mylists').insert([{ user_id: myId, promotion_id: Number(postId) }]);
+    } else {
+      // 解除
+      await supabase.from('mylists').delete().eq('user_id', myId).eq('promotion_id', Number(postId));
+    }
   };
 
-  const toggleVisited = async (postId: string) => {
+  const toggleVisited = (postId: string) => {
     let newVisited = visitedIds.includes(postId) ? visitedIds.filter(id => id !== postId) : [...visitedIds, postId];
     setVisitedIds(newVisited);
-    await supabase.from('mylists').insert([{ user_id: myId, promotion_id: postId }]);
+    localStorage.setItem('voca_visited_ids', JSON.stringify(newVisited));
   };
 
   const uploadImage = async (file: File, bucketPath: string) => {
@@ -128,34 +139,24 @@ export default function HomePage() {
 
   const handlePostSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!selectedEventId) {
-      alert("イベントを選択してニャ！");
-      return;
-    }
+    if (!selectedEventId) { alert("イベントを選択してニャ！"); return; }
     setLoading(true);
     try {
       let finalThumb = '';
       let finalIcon = '';
-      
       if (thumbRef.current?.files?.[0]) finalThumb = await uploadImage(thumbRef.current.files[0], 'thumbnails');
       if (iconRef.current?.files?.[0]) finalIcon = await uploadImage(iconRef.current.files[0], 'icons');
 
       const { error } = await supabase.from('promotions').insert([{ 
-        song_title: songTitle, 
-        video_url: songUrl, 
-        repost_url: repostUrl,
-        comment: comment,
-        author_id: myId, 
-        thumbnail_url: finalThumb, 
-        icon_url: finalIcon,
+        song_title: songTitle, video_url: songUrl, repost_url: repostUrl,
+        comment: comment, author_id: myId, thumbnail_url: finalThumb, icon_url: finalIcon,
         event_id: Number(selectedEventId) 
       }]);
 
       if (error) throw error;
       alert('宣伝完了！✨');
       setSongTitle(''); setSongUrl(''); setRepostUrl(''); setComment('');
-      await fetchAllPosts(); 
-      setActiveTab('list');
+      await fetchAllPosts(); setActiveTab('list');
     } catch (error: any) { alert(error.message); } finally { setLoading(false); }
   };
 
@@ -174,9 +175,7 @@ export default function HomePage() {
           </div>
           <div style={{ flex: 1, minWidth: 0 }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
-              <span style={tagStyle}>
-                {post.events?.event_name || 'イベント名なし'}
-              </span>
+              <span style={tagStyle}>{post.events?.event_name || 'イベント名なし'}</span>
               {post.author_id === myId && (
                 <button onClick={() => { if(confirm('削除する？')) supabase.from('promotions').delete().eq('id', post.id).then(fetchAllPosts); }} style={deleteStyle}>削除</button>
               )}
@@ -195,8 +194,8 @@ export default function HomePage() {
                   {visitedIds.includes(post.id) ? '巡回済 ✅' : '未巡回 ⚪'}
                 </button>
               ) : (
-                <button onClick={() => toggleCheck(post.id)} style={checkBtnStyle(myChecks.includes(post.id))}>
-                  {myChecks.includes(post.id) ? '💖 リスト済' : '🤍 リストに追加'}
+                <button onClick={() => toggleCheck(post.id.toString())} style={checkBtnStyle(myChecks.includes(post.id.toString()))}>
+                  {myChecks.includes(post.id.toString()) ? '💖 リスト済' : '🤍 リストに追加'}
                 </button>
               )}
             </div>
@@ -208,7 +207,6 @@ export default function HomePage() {
 
   return (
     <div style={{ maxWidth: '700px', margin: '0 auto', padding: '20px', backgroundColor: '#fff', minHeight: '100vh', fontFamily: 'sans-serif' }}>
-      
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '30px' }}>
         <h1 style={{ color: '#0056b3', fontSize: '2.2rem', fontWeight: 'bold', margin: 0 }}>巡ログ <span style={{ fontSize: '1.2rem', fontWeight: 'normal' }}>β</span></h1>
         <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
@@ -232,14 +230,10 @@ export default function HomePage() {
       {activeTab === 'mypage' && (
         <div style={{ display: 'grid', gap: '20px' }}>
           <div style={{ display: 'flex', gap: '12px', marginBottom: '10px' }}>
-            <div style={counterBoxStyle('#f8f9fa', '#666')}>
-              登録数 <span style={{fontSize: '1.4rem', color: '#0056b3'}}>{allPosts.filter(p => myChecks.includes(p.id)).length}</span>
-            </div>
-            <div style={counterBoxStyle('#f0fff4', '#28a745')}>
-              巡回済 <span style={{fontSize: '1.4rem'}}>{allPosts.filter(p => myChecks.includes(p.id) && visitedIds.includes(p.id)).length}</span>
-            </div>
+            <div style={counterBoxStyle('#f8f9fa', '#666')}>登録数 <span style={{fontSize: '1.4rem', color: '#0056b3'}}>{allPosts.filter(p => myChecks.includes(p.id.toString())).length}</span></div>
+            <div style={counterBoxStyle('#f0fff4', '#28a745')}>巡回済 <span style={{fontSize: '1.4rem'}}>{allPosts.filter(p => myChecks.includes(p.id.toString()) && visitedIds.includes(p.id.toString())).length}</span></div>
           </div>
-          {allPosts.filter(p => myChecks.includes(p.id)).map(post => <PostCard key={post.id} post={post} isMyPage={true} />)}
+          {allPosts.filter(p => myChecks.includes(p.id.toString())).map(post => <PostCard key={post.id} post={post} isMyPage={true} />)}
         </div>
       )}
 
@@ -247,55 +241,31 @@ export default function HomePage() {
         <div style={{ width: '100%', marginTop: '25px' }}>
           <h2 style={{ textAlign: 'center', marginBottom: '30px', fontSize: '1.2rem' }}>新曲を登録する 🚀</h2>
           <form onSubmit={handlePostSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '15px' }}>
-            
-            <select 
-              value={selectedEventId} 
-              onChange={(e) => setSelectedEventId(e.target.value)} 
-              style={classicInput}
-            >
-              {isEventLoading ? (
-                <option>イベントをロード中ニャ... 🐱</option>
-              ) : eventList.length === 0 ? (
-                <option>公開中のイベントがありません</option>
-              ) : (
-                eventList.map((ev) => (
-                  <option key={ev.id} value={ev.id}>
-                    {ev.event_name} ({ev.start_date.replace(/-/g, '.')} ~ {ev.end_date.replace(/-/g, '.')})
-                  </option>
-                ))
-              )}
+            <select value={selectedEventId} onChange={(e) => setSelectedEventId(e.target.value)} style={classicInput}>
+              {isEventLoading ? <option>イベントをロード中...</option> : eventList.map((ev) => (
+                <option key={ev.id} value={ev.id}>{ev.event_name} ({ev.start_date.replace(/-/g, '.')} ~ {ev.end_date.replace(/-/g, '.')})</option>
+              ))}
             </select>
-
             <input type="text" placeholder="曲のタイトル" value={songTitle} onChange={(e) => setSongTitle(e.target.value)} required style={classicInput} />
             <input type="text" placeholder="ボカロP名" value={inputPName} onChange={(e) => setInputPName(e.target.value)} style={classicInput} />
-            <input type="url" placeholder="動画URL (YouTube/niconico)" value={songUrl} onChange={(e) => setSongUrl(e.target.value)} required style={classicInput} />
-            <input type="url" placeholder="リポストして欲しいポストのURL (任意)" value={repostUrl} onChange={(e) => setRepostUrl(e.target.value)} style={classicInput} />
-            <p style={{ fontSize: '0.75rem', color: '#666', marginTop: '-10px', paddingLeft: '5px' }}>※引用RTボタンでこのポストが引用されます。</p>
-
-            <textarea placeholder="一言コメント" value={comment} onChange={(e) => setComment(e.target.value)} style={{ ...classicInput, minHeight: '120px' }} />
-            
+            <input type="url" placeholder="動画URL" value={songUrl} onChange={(e) => setSongUrl(e.target.value)} required style={classicInput} />
+            <input type="url" placeholder="リポストURL" value={repostUrl} onChange={(e) => setRepostUrl(e.target.value)} style={classicInput} />
+            <textarea placeholder="一言" value={comment} onChange={(e) => setComment(e.target.value)} style={{ ...classicInput, minHeight: '120px' }} />
             <div style={{ display: 'flex', gap: '15px' }}>
-              <div style={{ flex: 1 }}><label style={labelStyle}>サムネイル画像</label><input type="file" accept="image/*" ref={thumbRef} style={fileInputStyle} /></div>
-              <div style={{ flex: 1 }}><label style={labelStyle}>アイコン画像</label><input type="file" accept="image/*" ref={iconRef} style={fileInputStyle} /></div>
+              <div style={{ flex: 1 }}><label style={labelStyle}>サムネ</label><input type="file" ref={thumbRef} style={fileInputStyle} /></div>
+              <div style={{ flex: 1 }}><label style={labelStyle}>アイコン</label><input type="file" ref={iconRef} style={fileInputStyle} /></div>
             </div>
-            
-            <button type="submit" disabled={loading} style={btnStyle('#0d6efd', true)}>
-              {loading ? '送信中...' : 'この内容で宣伝する！'}
-            </button>
+            <button type="submit" disabled={loading} style={btnStyle('#0d6efd', true)}>{loading ? '送信中...' : '宣伝する！'}</button>
           </form>
         </div>
       )}
-
-      <div style={{ textAlign: 'center', marginTop: '60px', color: '#bbb', fontSize: '0.8rem' }}>
-        © 2026 巡ログ Project / Nekogaoka Gaburi
-      </div>
     </div>
   );
 }
 
-// スタイル定義
+// スタイル定義（維持）
 const counterBoxStyle = (bgColor: string, textColor: string) => ({ flex: 1, padding: '15px', borderRadius: '12px', backgroundColor: bgColor, color: textColor, textAlign: 'center' as const, fontSize: '0.9rem', fontWeight: 'bold' as const, border: '1px solid #eee' });
-const visitBtnStyle = (isVisited: boolean) => ({ background: isVisited ? '#e6fffa' : '#f8f9fa', border: isVisited ? '1px solid #38b2ac' : '1px solid #ddd', color: isVisited ? '#38b2ac' : '#666', borderRadius: '8px', padding: '6px 15px', cursor: 'pointer', fontWeight: 'bold' as const, fontSize: '0.9rem', transition: '0.2s' });
+const visitBtnStyle = (isVisited: boolean) => ({ background: isVisited ? '#e6fffa' : '#f8f9fa', border: isVisited ? '1px solid #38b2ac' : '1px solid #ddd', color: isVisited ? '#38b2ac' : '#666', borderRadius: '8px', padding: '6px 15px', cursor: 'pointer', fontWeight: 'bold' as const, fontSize: '0.9rem' });
 const navBtnStyle = (isActive: boolean) => ({ flex: 1, padding: '14px', borderRadius: '12px', border: '1px solid #ddd', cursor: 'pointer', backgroundColor: isActive ? '#0d6efd' : '#fff', color: isActive ? '#fff' : '#333', fontWeight: 'bold' as const });
 const postAddBtnStyle = (isActive: boolean) => ({ flex: 1, padding: '14px', borderRadius: '12px', border: '1px solid #0d6efd', cursor: 'pointer', backgroundColor: '#fff', color: '#0d6efd', fontWeight: 'bold' as const });
 const cardStyle = { width: '100%', border: '1px solid #eee', padding: '25px', borderRadius: '20px', backgroundColor: '#fff', marginBottom: '20px', boxShadow: '0 4px 12px rgba(0,0,0,0.03)' };
