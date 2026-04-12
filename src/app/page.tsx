@@ -14,7 +14,6 @@ export default function HomePage() {
   const [myChecks, setMyChecks] = useState<string[]>([]);
   const [visitedIds, setVisitedIds] = useState<string[]>([]);
 
-  // 💡 投稿祭の一覧管理（IDで管理するように統一ニャ！）
   const [eventList, setEventList] = useState<any[]>([]);
   const [selectedEventId, setSelectedEventId] = useState<string>(''); 
   
@@ -29,11 +28,14 @@ export default function HomePage() {
   const thumbRef = useRef<HTMLInputElement>(null);
   const iconRef = useRef<HTMLInputElement>(null);
 
-  // 💡 デフォルト画像（public/images/ に配置してニャ！）
   const DEFAULT_THUMB = '/images/listen-me.png'; 
   const DEFAULT_ICON = '/images/default-cat-p.png';
 
   useEffect(() => {
+    // 💡 1. まずイベントをロードするニャ！
+    fetchActiveEvents();
+    
+    // 💡 2. ログインチェック
     const userId = localStorage.getItem('voca_user_id');
     const name = localStorage.getItem('voca_p_name');
     
@@ -48,7 +50,6 @@ export default function HomePage() {
     setInputPName(name || '');
     
     fetchAllPosts();
-    fetchActiveEvents();
     
     const savedChecks = localStorage.getItem('voca_my_checks');
     if (savedChecks) setMyChecks(JSON.parse(savedChecks));
@@ -56,26 +57,34 @@ export default function HomePage() {
     if (savedVisited) setVisitedIds(JSON.parse(savedVisited));
   }, [router]);
 
-  // 💡 イベント取得：is_activeがtrueのものだけ持ってくるニャ
   const fetchActiveEvents = async () => {
-    const { data, error } = await supabase
-      .from('events')
-      .select('*')
-      .eq('is_active', true)
-      .order('start_date', { ascending: true });
+    try {
+      const { data, error } = await supabase
+        .from('events')
+        .select('*')
+        .eq('is_active', true)
+        .order('start_date', { ascending: true });
 
-    if (!error && data && data.length > 0) {
-      setEventList(data);
-      // 💡 取得できたら、最初のイベントIDを初期選択にするニャ
-      setSelectedEventId(data[0].id.toString());
+      if (error) {
+        console.error("イベント取得失敗ニャ！:", error.message);
+        return;
+      }
+
+      if (data) {
+        setEventList(data);
+        if (data.length > 0) {
+          setSelectedEventId(data[0].id.toString());
+        }
+      }
+    } catch (e) {
+      console.error("想定外のエラーニャ:", e);
     }
   };
 
   const fetchAllPosts = async () => {
-    // 💡 promotions と events を外部キーで結合。!left でイベントがなくても表示
     const { data, error } = await supabase
       .from('promotions')
-      .select('*, app_users ( p_name ), events!left ( event_name )')
+      .select('*, app_users ( p_name ), events ( event_name )')
       .order('created_at', { ascending: false });
     if (!error) setAllPosts(data || []);
   };
@@ -110,7 +119,7 @@ export default function HomePage() {
   const handlePostSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedEventId) {
-      alert("イベントを選択してニャ！");
+      alert("イベントが読み込まれていないニャ。少し待ってから再試行してニャ！");
       return;
     }
     setLoading(true);
@@ -121,7 +130,6 @@ export default function HomePage() {
       if (thumbRef.current?.files?.[0]) finalThumb = await uploadImage(thumbRef.current.files[0], 'thumbnails');
       if (iconRef.current?.files?.[0]) finalIcon = await uploadImage(iconRef.current.files[0], 'icons');
 
-      // 💡 event_id に数値を送る。型ミスマッチを防ぐニャ！
       const { error } = await supabase.from('promotions').insert([{ 
         song_title: songTitle, 
         video_url: songUrl, 
@@ -141,7 +149,6 @@ export default function HomePage() {
   };
 
   const PostCard = ({ post, isMyPage = false }: { post: any, isMyPage?: boolean }) => {
-    
     const generateXUrl = () => {
       const text = `${post.song_title} / ${post.app_users?.p_name} さんを視聴したニャ！\n\n#巡ログ #ボカロ`;
       const targetUrl = post.repost_url || post.video_url;
@@ -157,7 +164,7 @@ export default function HomePage() {
           <div style={{ flex: 1, minWidth: 0 }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
               <span style={tagStyle}>
-                {post.events?.event_name || 'イベント未設定'}
+                {post.events?.event_name || 'イベント'}
               </span>
               {post.author_id === myId && (
                 <button onClick={() => { if(confirm('削除する？')) supabase.from('promotions').delete().eq('id', post.id).then(fetchAllPosts); }} style={deleteStyle}>削除</button>
@@ -171,11 +178,7 @@ export default function HomePage() {
             <p style={commentStyle}>{post.comment}</p>
             <div style={{ display: 'flex', gap: '15px', alignItems: 'center', marginTop: '15px', flexWrap: 'wrap' }}>
               <a href={post.video_url} target="_blank" rel="noopener noreferrer" style={iconLinkStyle}>📺 視聴</a>
-              
-              <a href={generateXUrl()} target="_blank" rel="noopener noreferrer" style={xBtnStyle}>
-                📢 引用RT
-              </a>
-
+              <a href={generateXUrl()} target="_blank" rel="noopener noreferrer" style={xBtnStyle}>📢 引用RT</a>
               {isMyPage ? (
                 <button onClick={() => toggleVisited(post.id)} style={visitBtnStyle(visitedIds.includes(post.id))}>
                   {visitedIds.includes(post.id) ? '巡回済 ✅' : '未巡回 ⚪'}
@@ -225,11 +228,7 @@ export default function HomePage() {
               巡回済 <span style={{fontSize: '1.4rem'}}>{allPosts.filter(p => myChecks.includes(p.id) && visitedIds.includes(p.id)).length}</span>
             </div>
           </div>
-          {allPosts.filter(p => myChecks.includes(p.id)).length > 0 ? (
-            allPosts.filter(p => myChecks.includes(p.id)).map(post => <PostCard key={post.id} post={post} isMyPage={true} />)
-          ) : (
-            <p style={{ textAlign: 'center', color: '#999', marginTop: '40px' }}>リストに登録された作品はありません。</p>
-          )}
+          {allPosts.filter(p => myChecks.includes(p.id)).map(post => <PostCard key={post.id} post={post} isMyPage={true} />)}
         </div>
       )}
 
@@ -238,18 +237,20 @@ export default function HomePage() {
           <h2 style={{ textAlign: 'center', marginBottom: '30px', fontSize: '1.2rem' }}>新曲を登録する 🚀</h2>
           <form onSubmit={handlePostSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '15px' }}>
             
-            {/* 💡 ここがプルダウン。valueはID、表示は名前と期間ニャ */}
             <select 
               value={selectedEventId} 
               onChange={(e) => setSelectedEventId(e.target.value)} 
               style={classicInput}
             >
-              {eventList.length === 0 && <option>イベントをロード中...</option>}
-              {eventList.map((ev) => (
-                <option key={ev.id} value={ev.id}>
-                  {ev.event_name} ({ev.start_date.replace(/-/g, '.')} ~ {ev.end_date.replace(/-/g, '.')})
-                </option>
-              ))}
+              {eventList.length === 0 ? (
+                <option>イベントをロード中ニャ... 🐱</option>
+              ) : (
+                eventList.map((ev) => (
+                  <option key={ev.id} value={ev.id}>
+                    {ev.event_name} ({ev.start_date.replace(/-/g, '.')} ~ {ev.end_date.replace(/-/g, '.')})
+                  </option>
+                ))
+              )}
             </select>
 
             <input type="text" placeholder="曲のタイトル" value={songTitle} onChange={(e) => setSongTitle(e.target.value)} required style={classicInput} />
@@ -268,15 +269,11 @@ export default function HomePage() {
             </p>
 
             <textarea placeholder="一言コメント" value={comment} onChange={(e) => setComment(e.target.value)} style={{ ...classicInput, minHeight: '120px' }} />
-            
             <div style={{ display: 'flex', gap: '15px' }}>
               <div style={{ flex: 1 }}><label style={labelStyle}>サムネイル画像</label><input type="file" accept="image/*" ref={thumbRef} style={fileInputStyle} /></div>
               <div style={{ flex: 1 }}><label style={labelStyle}>アイコン画像</label><input type="file" accept="image/*" ref={iconRef} style={fileInputStyle} /></div>
             </div>
-            
-            <button type="submit" disabled={loading} style={btnStyle('#0d6efd', true)}>
-              {loading ? '送信中...' : 'この内容で宣伝する！'}
-            </button>
+            <button type="submit" disabled={loading} style={btnStyle('#0d6efd', true)}>{loading ? '送信中...' : 'この内容で宣伝する！'}</button>
           </form>
         </div>
       )}
