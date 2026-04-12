@@ -38,7 +38,7 @@ export default function LoginPage() {
         localStorage.setItem('voca_p_name', user.p_name);
         
         alert(`おかえり、${user.p_name}さん！✨`);
-        router.push('/mypage'); // マイページへGO
+        router.push('/'); // マイページへGO
       } else {
         alert('IDか合言葉が違うみたいだよ🦖');
       }
