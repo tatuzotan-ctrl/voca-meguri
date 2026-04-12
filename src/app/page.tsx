@@ -10,16 +10,14 @@ export default function HomePage() {
   const [myId, setMyId] = useState<string | null>(null);
   const [pName, setPName] = useState('');
   
-  // 投稿一覧
   const [allPosts, setAllPosts] = useState<any[]>([]);
-  
-  // 投稿フォーム用
-  const [inputPName, setInputPName] = useState(''); // 修正可能なP名
+  const [myChecks, setMyChecks] = useState<string[]>([]); // チェックした投稿IDを保存
+
+  // フォーム用
+  const [inputPName, setInputPName] = useState('');
   const [songTitle, setSongTitle] = useState('');
   const [songUrl, setSongUrl] = useState('');
   const [comment, setComment] = useState('');
-  const [thumbnailUrl, setThumbnailUrl] = useState('');
-  const [iconUrl, setIconUrl] = useState('');
   const [loading, setLoading] = useState(false);
 
   const router = useRouter();
@@ -33,9 +31,12 @@ export default function HomePage() {
       setIsLoggedIn(true);
       setMyId(userId);
       setPName(name || 'ボカロP');
-      setInputPName(name || ''); // 初期値として登録名をセット
+      setInputPName(name || '');
     }
     fetchAllPosts();
+    // ローカルストレージからチェック情報を復元
+    const savedChecks = localStorage.getItem('voca_my_checks');
+    if (savedChecks) setMyChecks(JSON.parse(savedChecks));
   }, []);
 
   const fetchAllPosts = async () => {
@@ -46,18 +47,24 @@ export default function HomePage() {
     if (!error) setAllPosts(data || []);
   };
 
-  // --- 画像アップロード処理 ---
+  // チェックボタンの切り替え
+  const toggleCheck = (postId: string) => {
+    let newChecks;
+    if (myChecks.includes(postId)) {
+      newChecks = myChecks.filter(id => id !== postId);
+    } else {
+      newChecks = [...myChecks, postId];
+    }
+    setMyChecks(newChecks);
+    localStorage.setItem('voca_my_checks', JSON.stringify(newChecks));
+  };
+
   const uploadImage = async (file: File, bucketPath: string) => {
     const fileExt = file.name.split('.').pop();
     const fileName = `${Math.random()}.${fileExt}`;
     const filePath = `${bucketPath}/${fileName}`;
-
-    const { error: uploadError } = await supabase.storage
-      .from('images') // さっき作ったバケット名
-      .upload(filePath, file);
-
+    const { error: uploadError } = await supabase.storage.from('images').upload(filePath, file);
     if (uploadError) throw uploadError;
-
     const { data } = supabase.storage.from('images').getPublicUrl(filePath);
     return data.publicUrl;
   };
@@ -65,36 +72,25 @@ export default function HomePage() {
   const handlePostSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
-
     try {
-      let finalThumb = thumbnailUrl;
-      let finalIcon = iconUrl;
+      let finalThumb = '';
+      let finalIcon = '';
+      if (thumbRef.current?.files?.[0]) finalThumb = await uploadImage(thumbRef.current.files[0], 'thumbnails');
+      if (iconRef.current?.files?.[0]) finalIcon = await uploadImage(iconRef.current.files[0], 'icons');
 
-      // ファイルが選択されていればアップロード実行
-      if (thumbRef.current?.files?.[0]) {
-        finalThumb = await uploadImage(thumbRef.current.files[0], 'thumbnails');
-      }
-      if (iconRef.current?.files?.[0]) {
-        finalIcon = await uploadImage(iconRef.current.files[0], 'icons');
-      }
-
-      const { error } = await supabase
-        .from('promotions')
-        .insert([{ 
-          song_title: songTitle, 
-          video_url: songUrl, 
-          comment: comment,
-          author_id: myId,
-          thumbnail_url: finalThumb,
-          icon_url: finalIcon,
-          // contributor_name: inputPName // 必要に応じてカラム追加してください
-        }]);
+      const { error } = await supabase.from('promotions').insert([{ 
+        song_title: songTitle, 
+        video_url: songUrl, // ここを video_url に修正済み
+        comment: comment,
+        author_id: myId,
+        thumbnail_url: finalThumb,
+        icon_url: finalIcon,
+        // contributor_name: inputPName 
+      }]);
 
       if (error) throw error;
-
-      alert('宣伝の投稿に成功したよ！✨');
+      alert('宣伝完了！✨');
       setSongTitle(''); setSongUrl(''); setComment('');
-      setThumbnailUrl(''); setIconUrl('');
       fetchAllPosts();
       setActiveTab('list');
     } catch (error: any) {
@@ -105,98 +101,119 @@ export default function HomePage() {
   };
 
   const handleDelete = async (postId: string) => {
-    if (!confirm('本当に削除していい？🦖')) return;
-    const { error } = await supabase.from('promotions').delete().eq('id', postId);
-    if (!error) fetchAllPosts();
+    if (!confirm('削除するよ？🦖')) return;
+    await supabase.from('promotions').delete().eq('id', postId);
+    fetchAllPosts();
   };
 
-  if (!isLoggedIn) {
-    return (
-      <div style={{ textAlign: 'center', marginTop: '100px', fontFamily: 'sans-serif' }}>
-        <h1>巡回ログ 🦖</h1>
-        <button onClick={() => router.push('/login')} style={btnStyle('#0070f3', true)}>ログインして始める</button>
-      </div>
-    );
-  }
+  if (!isLoggedIn) return (
+    <div style={{ textAlign: 'center', marginTop: '100px' }}>
+      <h1>巡回ログ 🦖</h1>
+      <button onClick={() => router.push('/login')} style={btnStyle('#0070f3', true)}>ログイン</button>
+    </div>
+  );
 
   return (
-    <div style={{ maxWidth: '800px', margin: '0 auto', padding: '20px', fontFamily: 'sans-serif' }}>
-      <h1 style={{ textAlign: 'center' }}>巡回ログ 2.0 🦖</h1>
+    <div style={{ maxWidth: '600px', margin: '0 auto', padding: '20px', fontFamily: 'sans-serif' }}>
+      <h1 style={{ textAlign: 'center', fontSize: '1.5rem' }}>巡回ログ 2.0 🦖</h1>
 
-      {/* --- タブメニュー --- */}
-      <div style={{ display: 'flex', justifyContent: 'center', gap: '15px', marginBottom: '30px', borderBottom: '2px solid #ddd' }}>
+      {/* --- タブ --- */}
+      <div style={{ display: 'flex', justifyContent: 'center', gap: '20px', marginBottom: '20px', borderBottom: '1px solid #ddd' }}>
         <button onClick={() => setActiveTab('list')} style={tabStyle(activeTab === 'list')}>投稿作品一覧</button>
         <button onClick={() => setActiveTab('mypage')} style={tabStyle(activeTab === 'mypage')}>マイページ</button>
         <button onClick={() => setActiveTab('post')} style={tabStyle(activeTab === 'post')}>作品登録</button>
       </div>
 
-      {/* --- コンテンツ --- */}
+      {/* --- 一覧表示 --- */}
       {activeTab === 'list' && (
-        <div style={{ display: 'grid', gap: '20px' }}>
+        <div style={{ display: 'grid', gap: '15px' }}>
           {allPosts.map(post => (
             <div key={post.id} style={cardStyle}>
-              <div style={{ display: 'flex', gap: '15px', alignItems: 'flex-start' }}>
-                <img src={post.thumbnail_url || 'https://via.placeholder.com/120x70?text=No+Image'} alt="thumb" style={{ width: '120px', height: '70px', objectFit: 'cover', borderRadius: '5px' }} />
-                <div style={{ flex: 1 }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '5px' }}>
-                    <img src={post.icon_url || 'https://via.placeholder.com/24'} alt="icon" style={{ width: '24px', height: '24px', borderRadius: '50%' }} />
-                    <span style={{ fontSize: '0.85rem', color: '#0070f3', fontWeight: 'bold' }}>{post.app_users?.p_name}</span>
+              <div style={{ display: 'flex', gap: '12px' }}>
+                <img 
+                  src={post.thumbnail_url || 'https://via.placeholder.com/150x90?text=No+Image'} 
+                  style={{ width: '120px', height: '70px', objectFit: 'cover', borderRadius: '8px' }} 
+                  alt="thumb" 
+                />
+                <div style={{ flex: 1, position: 'relative' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '5px', marginBottom: '3px' }}>
+                    <img src={post.icon_url || 'https://via.placeholder.com/24'} style={{ width: '20px', height: '20px', borderRadius: '50%' }} alt="icon" />
+                    <span style={{ fontSize: '0.8rem', color: '#0070f3', fontWeight: 'bold' }}>{post.app_users?.p_name || '不明なP'}</span>
                   </div>
-                  <h3 style={{ margin: '0' }}>{post.song_title}</h3>
-                  <p style={{ fontSize: '0.9rem', color: '#444' }}>{post.comment}</p>
-                  <a href={post.song_url} target="_blank" rel="noopener noreferrer" style={{ fontSize: '0.9rem', fontWeight: 'bold' }}>聴きにいく 🔗</a>
+                  <h3 style={{ margin: '0', fontSize: '1rem' }}>{post.song_title}</h3>
+                  <p style={{ fontSize: '0.85rem', color: '#555', margin: '3px 0' }}>{post.comment}</p>
+                  
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '5px' }}>
+                    {/* 修正ポイント：hrefを video_url に */}
+                    <a href={post.video_url} target="_blank" rel="noopener noreferrer" style={{ fontSize: '0.9rem', color: '#333', fontWeight: 'bold', textDecoration: 'none' }}>
+                      聴きにいく 🔗
+                    </a>
+
+                    <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
+                      {/* マイページ登録チェックボタン */}
+                      <button 
+                        onClick={() => toggleCheck(post.id)}
+                        style={{ 
+                          background: 'none', border: '1px solid #ccc', borderRadius: '5px', padding: '3px 8px', cursor: 'pointer',
+                          backgroundColor: myChecks.includes(post.id) ? '#ffd700' : 'transparent',
+                          fontSize: '0.8rem'
+                        }}
+                      >
+                        {myChecks.includes(post.id) ? '✅ チェック済み' : '📌 マイページ登録'}
+                      </button>
+
+                      {post.author_id === myId && (
+                        <button onClick={() => handleDelete(post.id)} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '1.2rem' }}>🗑️</button>
+                      )}
+                    </div>
+                  </div>
                 </div>
-                {post.author_id === myId && (
-                  <button onClick={() => handleDelete(post.id)} style={{ color: 'red', border: 'none', background: 'none', cursor: 'pointer' }}>🗑️</button>
-                )}
               </div>
             </div>
           ))}
         </div>
       )}
 
+      {/* --- 作品登録 --- */}
       {activeTab === 'post' && (
-        <div style={{ maxWidth: '500px', margin: '0 auto' }}>
-          <h2 style={{ textAlign: 'center' }}>新曲を登録する 🚀</h2>
-          <form onSubmit={handlePostSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '15px' }}>
-            <label style={labelStyle}>ボカロP名（変更可能）</label>
-            <input type="text" value={inputPName} onChange={(e) => setInputPName(e.target.value)} style={inputStyle} />
-            
-            <label style={labelStyle}>曲のタイトル</label>
-            <input type="text" value={songTitle} onChange={(e) => setSongTitle(e.target.value)} required style={inputStyle} />
-            
-            <label style={labelStyle}>動画URL</label>
-            <input type="url" value={songUrl} onChange={(e) => setSongUrl(e.target.value)} required style={inputStyle} />
-            
-            <label style={labelStyle}>サムネイル画像を選択</label>
-            <input type="file" accept="image/*" ref={thumbRef} style={inputStyle} />
-            
-            <label style={labelStyle}>アイコン画像を選択</label>
-            <input type="file" accept="image/*" ref={iconRef} style={inputStyle} />
-            
-            <label style={labelStyle}>一言コメント</label>
-            <textarea value={comment} onChange={(e) => setComment(e.target.value)} style={{ ...inputStyle, minHeight: '80px' }} />
-            
-            <button type="submit" disabled={loading} style={btnStyle('#0070f3', true)}>
-              {loading ? 'アップロード中...' : 'この内容で宣伝する！'}
-            </button>
-          </form>
-        </div>
+        <form onSubmit={handlePostSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+          <label style={labelStyle}>ボカロP名</label>
+          <input type="text" value={inputPName} onChange={(e) => setInputPName(e.target.value)} style={inputStyle} />
+          <input type="text" placeholder="曲のタイトル" value={songTitle} onChange={(e) => setSongTitle(e.target.value)} required style={inputStyle} />
+          <input type="url" placeholder="動画URL (YouTube/niconico)" value={songUrl} onChange={(e) => setSongUrl(e.target.value)} required style={inputStyle} />
+          <label style={labelStyle}>サムネイル</label>
+          <input type="file" ref={thumbRef} style={inputStyle} />
+          <label style={labelStyle}>アイコン</label>
+          <input type="file" ref={iconRef} style={inputStyle} />
+          <textarea placeholder="一言コメント" value={comment} onChange={(e) => setComment(e.target.value)} style={{ ...inputStyle, minHeight: '80px' }} />
+          <button type="submit" disabled={loading} style={btnStyle('#0070f3', true)}>
+            {loading ? '送信中...' : 'この内容で宣伝する！'}
+          </button>
+        </form>
       )}
 
+      {/* --- マイページ（簡易版：チェックした曲だけ表示） --- */}
       {activeTab === 'mypage' && (
-        <div style={{ textAlign: 'center', padding: '50px 0' }}>
-          <h2>{pName} さんの管理室</h2>
-          <button onClick={() => { localStorage.clear(); window.location.reload(); }} style={{ color: 'red', border: '1px solid red', padding: '10px 20px', cursor: 'pointer', backgroundColor: 'transparent' }}>ログアウト</button>
+        <div>
+          <h2>チェックした作品一覧 📌</h2>
+          {allPosts.filter(p => myChecks.includes(p.id)).length > 0 ? (
+            allPosts.filter(p => myChecks.includes(p.id)).map(post => (
+              <div key={post.id} style={{ ...cardStyle, marginBottom: '10px' }}>
+                <strong>{post.song_title}</strong>
+                <p><a href={post.video_url} target="_blank">聴きにいく</a></p>
+              </div>
+            ))
+          ) : <p>まだチェックした作品はありません。</p>}
+          <button onClick={() => { localStorage.clear(); window.location.reload(); }} style={{ marginTop: '30px', color: 'red', border: 'none', background: 'none', cursor: 'pointer' }}>ログアウト</button>
         </div>
       )}
     </div>
   );
 }
 
-// --- スタイル定義（簡略化） ---
-const tabStyle = (isActive: boolean) => ({ padding: '12px 20px', cursor: 'pointer', border: 'none', backgroundColor: 'transparent', borderBottom: isActive ? '3px solid #0070f3' : 'none', fontWeight: isActive ? 'bold' : 'normal', color: isActive ? '#0070f3' : '#666' });
-const cardStyle = { border: '1px solid #eee', padding: '15px', borderRadius: '10px', backgroundColor: '#fff', boxShadow: '0 2px 4px rgba(0,0,0,0.05)' };
-const inputStyle = { width: '100%', padding: '10px', borderRadius: '5px', border: '1px solid #ccc' };
-const labelStyle = { fontSize: '0.8rem', fontWeight: 'bold', color: '#666', marginBottom: '-10px' };
-const btnStyle = (color: string, full: boolean) => ({ width: full ? '100%' : 'auto', padding: '12px', backgroundColor: color, color: 'white', border: 'none', borderRadius: '5px', cursor: 'pointer', fontWeight: 'bold' });
+// スタイル
+const tabStyle = (isActive: boolean) => ({ padding: '10px', cursor: 'pointer', border: 'none', backgroundColor: 'transparent', borderBottom: isActive ? '3px solid #0070f3' : 'none', color: isActive ? '#0070f3' : '#666', fontWeight: isActive ? 'bold' : 'normal' });
+const cardStyle = { padding: '15px', border: '1px solid #f0f0f0', borderRadius: '12px', backgroundColor: '#fff', boxShadow: '0 4px 6px rgba(0,0,0,0.02)' };
+const inputStyle = { width: '100%', padding: '10px', borderRadius: '8px', border: '1px solid #ddd' };
+const labelStyle = { fontSize: '0.8rem', color: '#666', marginBottom: '-8px' };
+const btnStyle = (color: string, full: boolean) => ({ width: full ? '100%' : 'auto', padding: '12px', backgroundColor: color, color: 'white', border: 'none', borderRadius: '8px', cursor: 'pointer', fontWeight: 'bold' });
