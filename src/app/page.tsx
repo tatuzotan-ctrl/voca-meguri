@@ -133,6 +133,6 @@ export default function HomePage() {
     // UI部分は前回のものをそのまま使ってニャ！
     // toggleCheck と toggleVisited の呼び出し先が DB 対応になったので、
     // これでログアウトしてもデータがガブッと残るようになります。
-    <div>（前述の最新UIコードと同じニャ！）</div>
+    <div>（前述の最新UIコードと同じニャß）</div>
   );
 }
