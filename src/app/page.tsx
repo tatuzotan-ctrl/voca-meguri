@@ -232,7 +232,7 @@ export default function HomePage() {
       )}
 
       <div style={{ textAlign: 'center', marginTop: '60px', color: '#bbb', fontSize: '0.8rem' }}>
-        © 2026 巡ログ Project / 猫ヶ丘ガブリ
+        © 2026 巡ログ Project / Nekogaoka Gaburi
       </div>
     </div>
   );
