@@ -57,7 +57,7 @@ export default function HomePage() {
       .from('events')
       .select('*')
       .eq('is_active', true)
-      .order('start_date', { ascending: false });
+      .order('start_date', { ascending: true });
 
     if (!error && data) {
       setEventList(data);
