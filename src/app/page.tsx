@@ -11,8 +11,8 @@ export default function HomePage() {
   const [pName, setPName] = useState('');
   
   const [allPosts, setAllPosts] = useState<any[]>([]);
-  const [myChecks, setMyChecks] = useState<string[]>([]); // promotion_idの配列
-  const [visitedIds, setVisitedIds] = useState<string[]>([]);
+  const [myChecks, setMyChecks] = useState<string[]>([]); // mylistsに登録されているpromotion_id
+  const [visitedIds, setVisitedIds] = useState<string[]>([]); // patrol_statusでis_visited=trueのpromotion_id
 
   const [eventList, setEventList] = useState<any[]>([]);
   const [selectedEventId, setSelectedEventId] = useState<string>(''); 
@@ -34,40 +34,51 @@ export default function HomePage() {
 
   useEffect(() => {
     const init = async () => {
-      const userId = localStorage.getItem('voca_user_id');
+      const uId = localStorage.getItem('voca_user_id');
       const name = localStorage.getItem('voca_p_name');
       
-      if (!userId) {
+      if (!uId) {
         router.push('/login');
         return;
       }
 
       setIsLoggedIn(true);
-      setMyId(userId);
+      setMyId(uId);
       setPName(name || 'ボカロP');
       setInputPName(name || '');
 
+      // 全データ取得
       await Promise.all([
         fetchActiveEvents(),
         fetchAllPosts(),
-        fetchMyList(userId), // 💡 ログイン時にDBからリストをロード
+        fetchUserStatus(uId)
       ]);
-      
-      const savedVisited = localStorage.getItem('voca_visited_ids');
-      if (savedVisited) setVisitedIds(JSON.parse(savedVisited));
     };
     init();
   }, [router]);
 
-  // 💡 DBからマイリストを取得するニャ
-  const fetchMyList = async (userId: string) => {
-    const { data, error } = await supabase
+  // 💡 DBからマイリストと巡回ステータスを同期するニャ
+  const fetchUserStatus = async (userId: string) => {
+    // 1. まず mylists から自分の登録曲を全取得
+    const { data: listData, error: listError } = await supabase
       .from('mylists')
       .select('promotion_id')
       .eq('user_id', userId);
 
-    if (!error && data) {
-      setMyChecks(data.map(item => item.promotion_id.toString()));
+    if (!listError && listData) {
+      const pIds = listData.map(d => d.promotion_id.toString());
+      setMyChecks(pIds);
+
+      // 2. その曲たちの中から patrol_status が is_visited のものを取得
+      const { data: statusData, error: statusError } = await supabase
+        .from('patrol_status')
+        .select('promotion_id')
+        .eq('is_visited', true)
+        .in('promotion_id', listData.map(d => d.promotion_id));
+
+      if (!statusError && statusData) {
+        setVisitedIds(statusData.map(d => d.promotion_id.toString()));
+      }
     }
   };
 
@@ -78,7 +89,6 @@ export default function HomePage() {
       .select('*')
       .eq('is_active', true)
       .order('start_date', { ascending: true });
-
     if (!error && data) {
       setEventList(data);
       if (data.length > 0) setSelectedEventId(data[0].id.toString());
@@ -101,31 +111,43 @@ export default function HomePage() {
     router.push('/login');
   };
 
-  // 💡 修正：DB（mylistsテーブル）と同期するトグル処理
+  // 💡 マイリスト登録（mylistsテーブルへの保存）
   const toggleCheck = async (postId: string) => {
     if (!myId) return;
-
     const isChecked = myChecks.includes(postId);
-    const newChecks = isChecked 
-      ? myChecks.filter(id => id !== postId) 
-      : [...myChecks, postId];
-
-    // UIを即座に更新（楽観的アップデート）
+    const newChecks = isChecked ? myChecks.filter(id => id !== postId) : [...myChecks, postId];
     setMyChecks(newChecks);
 
     if (!isChecked) {
-      // 登録
       await supabase.from('mylists').insert([{ user_id: myId, promotion_id: Number(postId) }]);
     } else {
-      // 解除
       await supabase.from('mylists').delete().eq('user_id', myId).eq('promotion_id', Number(postId));
+      // マイリストから消えたら巡回ステータスも消えるのが自然ニャ
+      setVisitedIds(prev => prev.filter(id => id !== postId));
     }
   };
 
-  const toggleVisited = (postId: string) => {
-    let newVisited = visitedIds.includes(postId) ? visitedIds.filter(id => id !== postId) : [...visitedIds, postId];
+  // 💡 巡回ステータス更新（patrol_statusテーブルへの保存）
+  const toggleVisited = async (postId: string) => {
+    if (!myId) return;
+    const isVisited = visitedIds.includes(postId);
+    const newVisited = isVisited ? visitedIds.filter(id => id !== postId) : [...visitedIds, postId];
     setVisitedIds(newVisited);
-    localStorage.setItem('voca_visited_ids', JSON.stringify(newVisited));
+
+    // mylistsのIDを特定するためにまず参照
+    const { data: mylist } = await supabase
+      .from('mylists')
+      .select('id')
+      .eq('user_id', myId)
+      .eq('promotion_id', Number(postId))
+      .single();
+
+    if (mylist) {
+      await supabase.from('patrol_status').upsert({
+        mylist_id: mylist.id,
+        is_visited: !isVisited
+      }, { onConflict: 'mylist_id' });
+    }
   };
 
   const uploadImage = async (file: File, bucketPath: string) => {
@@ -167,6 +189,9 @@ export default function HomePage() {
       return `https://twitter.com/intent/tweet?text=${encodeURIComponent(text)}&url=${encodeURIComponent(targetUrl)}`;
     };
 
+    const isChecked = myChecks.includes(post.id.toString());
+    const isVisited = visitedIds.includes(post.id.toString());
+
     return (
       <div style={cardStyle}>
         <div style={{ display: 'flex', gap: '25px', alignItems: 'flex-start' }}>
@@ -190,12 +215,12 @@ export default function HomePage() {
               <a href={post.video_url} target="_blank" rel="noopener noreferrer" style={iconLinkStyle}>📺 視聴</a>
               <a href={generateXUrl()} target="_blank" rel="noopener noreferrer" style={xBtnStyle}>📢 引用RT</a>
               {isMyPage ? (
-                <button onClick={() => toggleVisited(post.id)} style={visitBtnStyle(visitedIds.includes(post.id))}>
-                  {visitedIds.includes(post.id) ? '巡回済 ✅' : '未巡回 ⚪'}
+                <button onClick={() => toggleVisited(post.id.toString())} style={visitBtnStyle(isVisited)}>
+                  {isVisited ? '巡回済 ✅' : '未巡回 ⚪'}
                 </button>
               ) : (
-                <button onClick={() => toggleCheck(post.id.toString())} style={checkBtnStyle(myChecks.includes(post.id.toString()))}>
-                  {myChecks.includes(post.id.toString()) ? '💖 リスト済' : '🤍 リストに追加'}
+                <button onClick={() => toggleCheck(post.id.toString())} style={checkBtnStyle(isChecked)}>
+                  {isChecked ? '💖 リスト済' : '🤍 リストに追加'}
                 </button>
               )}
             </div>
@@ -230,8 +255,8 @@ export default function HomePage() {
       {activeTab === 'mypage' && (
         <div style={{ display: 'grid', gap: '20px' }}>
           <div style={{ display: 'flex', gap: '12px', marginBottom: '10px' }}>
-            <div style={counterBoxStyle('#f8f9fa', '#666')}>登録数 <span style={{fontSize: '1.4rem', color: '#0056b3'}}>{allPosts.filter(p => myChecks.includes(p.id.toString())).length}</span></div>
-            <div style={counterBoxStyle('#f0fff4', '#28a745')}>巡回済 <span style={{fontSize: '1.4rem'}}>{allPosts.filter(p => myChecks.includes(p.id.toString()) && visitedIds.includes(p.id.toString())).length}</span></div>
+            <div style={counterBoxStyle('#f8f9fa', '#666')}>登録数 <span style={{fontSize: '1.4rem', color: '#0056b3'}}>{myChecks.length}</span></div>
+            <div style={counterBoxStyle('#f0fff4', '#28a745')}>巡回済 <span style={{fontSize: '1.4rem'}}>{visitedIds.length}</span></div>
           </div>
           {allPosts.filter(p => myChecks.includes(p.id.toString())).map(post => <PostCard key={post.id} post={post} isMyPage={true} />)}
         </div>
@@ -243,11 +268,10 @@ export default function HomePage() {
           <form onSubmit={handlePostSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '15px' }}>
             <select value={selectedEventId} onChange={(e) => setSelectedEventId(e.target.value)} style={classicInput}>
               {isEventLoading ? <option>イベントをロード中...</option> : eventList.map((ev) => (
-                <option key={ev.id} value={ev.id}>{ev.event_name} ({ev.start_date.replace(/-/g, '.')} ~ {ev.end_date.replace(/-/g, '.')})</option>
+                <option key={ev.id} value={ev.id}>{ev.event_name}</option>
               ))}
             </select>
             <input type="text" placeholder="曲のタイトル" value={songTitle} onChange={(e) => setSongTitle(e.target.value)} required style={classicInput} />
-            <input type="text" placeholder="ボカロP名" value={inputPName} onChange={(e) => setInputPName(e.target.value)} style={classicInput} />
             <input type="url" placeholder="動画URL" value={songUrl} onChange={(e) => setSongUrl(e.target.value)} required style={classicInput} />
             <input type="url" placeholder="リポストURL" value={repostUrl} onChange={(e) => setRepostUrl(e.target.value)} style={classicInput} />
             <textarea placeholder="一言" value={comment} onChange={(e) => setComment(e.target.value)} style={{ ...classicInput, minHeight: '120px' }} />
@@ -259,11 +283,12 @@ export default function HomePage() {
           </form>
         </div>
       )}
+      <div style={{ textAlign: 'center', marginTop: '60px', color: '#bbb', fontSize: '0.8rem' }}>© 2026 巡ログ Project / Nekogaoka Gaburi</div>
     </div>
   );
 }
 
-// スタイル定義（維持）
+// --- スタイル定義（昨夜のものを維持） ---
 const counterBoxStyle = (bgColor: string, textColor: string) => ({ flex: 1, padding: '15px', borderRadius: '12px', backgroundColor: bgColor, color: textColor, textAlign: 'center' as const, fontSize: '0.9rem', fontWeight: 'bold' as const, border: '1px solid #eee' });
 const visitBtnStyle = (isVisited: boolean) => ({ background: isVisited ? '#e6fffa' : '#f8f9fa', border: isVisited ? '1px solid #38b2ac' : '1px solid #ddd', color: isVisited ? '#38b2ac' : '#666', borderRadius: '8px', padding: '6px 15px', cursor: 'pointer', fontWeight: 'bold' as const, fontSize: '0.9rem' });
 const navBtnStyle = (isActive: boolean) => ({ flex: 1, padding: '14px', borderRadius: '12px', border: '1px solid #ddd', cursor: 'pointer', backgroundColor: isActive ? '#0d6efd' : '#fff', color: isActive ? '#fff' : '#333', fontWeight: 'bold' as const });
