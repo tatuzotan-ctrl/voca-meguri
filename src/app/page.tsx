@@ -129,7 +129,7 @@ export default function HomePage() {
         author_id: myId, 
         thumbnail_url: finalThumb, // 空ならDBにnullが入るニャ
         icon_url: finalIcon,      // 空ならDBにnullが入るニャ
-        event_tag: selectedTag 
+        event_id: selectedTag 
       }]);
 
       if (error) throw error;
@@ -160,7 +160,7 @@ export default function HomePage() {
           </div>
           <div style={{ flex: 1, minWidth: 0 }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
-              <span style={tagStyle}>{post.event_tag?.split(' (')[0] || 'ボカロ15秒投稿祭'}</span>
+              <span style={tagStyle}>{post.event_id?.split(' (')[0] || 'ボカロ15秒投稿祭'}</span>
               {post.author_id === myId && (
                 <button onClick={() => { if(confirm('削除する？')) supabase.from('promotions').delete().eq('id', post.id).then(fetchAllPosts); }} style={deleteStyle}>削除</button>
               )}
