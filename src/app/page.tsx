@@ -112,9 +112,6 @@ export default function HomePage() {
           
           {/* ログインIDとP名の表示エリア */}
           <div style={{ textAlign: 'right', lineHeight: '1.3' }}>
-            <div style={{ fontSize: '0.7rem', color: '#aaa', fontWeight: 'bold' }}>
-              ID: {myId?.substring(0, 8)}
-            </div>
             <div style={{ fontSize: '0.95rem', color: '#333', fontWeight: 'bold' }}>
               {pName} <span style={{ fontSize: '0.8rem', fontWeight: 'normal' }}>さん</span>
             </div>
