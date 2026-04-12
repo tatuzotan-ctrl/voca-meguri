@@ -103,6 +103,11 @@ export default function HomePage() {
       {/* --- ヘッダー領域（画像を削除してスッキリ） --- */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '30px' }}>
         <h1 style={{ color: '#0056b3', fontSize: '2.2rem', fontWeight: 'bold', margin: 0 }}>巡ログ <span style={{ fontSize: '1.2rem', fontWeight: 'normal' }}>β</span></h1>
+{/* ログインIDとP名の表示エリア */}
+          <div style={{ textAlign: 'right', lineHeight: '1.2' }}>
+            <div style={{ fontSize: '0.75rem', color: '#999', fontWeight: 'bold' }}>ID: {myId?.substring(0, 8)}...</div>
+            <div style={{ fontSize: '1rem', color: '#333', fontWeight: 'bold' }}>{pName} <span style={{fontSize: '0.8rem', fontWeight: 'normal'}}>さん</span></div>
+          </div>
         <button onClick={() => { localStorage.clear(); window.location.reload(); }} style={logoutBtnStyle}>ログアウト</button>
       </div>
 
