@@ -202,7 +202,7 @@ export default function HomePage() {
 
       {/* --- フッター --- */}
       <div style={{ textAlign: 'center', marginTop: '60px', color: '#999', fontSize: '0.85rem' }}>
-        © 2026 巡ログ Project / {pName}
+        © 2026 巡ログ Project / 猫ヶ丘ガブリ
       </div>
     </div>
   );
