@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { supabase } from '@/lib/supabase'; // マスターの環境に合わせて調整してください
+import { supabase } from '@/lib/supabase';
 import bcrypt from 'bcryptjs';
 import { useRouter } from 'next/navigation';
 
