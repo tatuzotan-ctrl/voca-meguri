@@ -6,32 +6,30 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 
 export default function LoginPage() {
-  // ステート名を loginId に変更ニャ！
   const [loginId, setLoginId] = useState('');
-  const [password, setPassword] = useState('');
+  const [password, setPassword] = useState(''); // ステート名は password のままでOK（中身を passcode に入れる）
   const router = useRouter();
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
-      // 1. app_usersテーブルから login_id と password が一致するユーザーを探すニャ
+      // 修正：password カラムではなく passcode カラムを参照するニャ！
       const { data: user, error } = await supabase
         .from('app_users')
         .select('*')
-        .eq('login_id', loginId)
-        .eq('password', password) // 本来はハッシュ化すべきですが、現状の仕様に合わせます
+        .eq('user_id', loginId) 
+        .eq('passcode', password) // ここを修正
         .single();
 
       if (error || !user) {
         throw new Error('ログインIDかパスワードが違うニャ...');
       }
 
-      // 2. ログイン成功：情報をローカルストレージに保存
       localStorage.setItem('voca_user_id', user.id);
       localStorage.setItem('voca_p_name', user.p_name);
       
       alert('ログイン成功ニャ！🐱');
-      router.push('/');
+      router.push('/'); 
     } catch (error: any) {
       alert('エラーニャ： ' + error.message);
     }
@@ -41,9 +39,7 @@ export default function LoginPage() {
     <div style={containerStyle}>
       <div style={formCardStyle}>
         <h1 style={titleStyle}>巡ログ：ログイン 🐱</h1>
-        
         <form onSubmit={handleLogin} style={formStyle}>
-          {/* type を text に、value を loginId に修正したニャ！ */}
           <input
             type="text"
             placeholder="ログインID"
@@ -52,7 +48,6 @@ export default function LoginPage() {
             required
             style={inputStyle}
           />
-          
           <input
             type="password"
             placeholder="パスワード"
@@ -61,24 +56,18 @@ export default function LoginPage() {
             required
             style={inputStyle}
           />
-          
-          <button type="submit" style={buttonStyle}>
-            ログイン
-          </button>
+          <button type="submit" style={buttonStyle}>ログイン</button>
         </form>
-        
         <p style={registerTextStyle}>
           まだ登録してない？ 
-          <Link href="/register" style={registerLinkStyle}>
-            新規登録はこちらニャ！
-          </Link>
+          <Link href="/register" style={registerLinkStyle}>新規登録はこちらニャ！</Link>
         </p>
       </div>
     </div>
   );
 }
 
-// --- 以下、スタイル定義は前回と同じニャ！ ---
+// --- スタイル定義（変更なし） ---
 const containerStyle: React.CSSProperties = { display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '100vh', backgroundColor: '#f9f9f9', fontFamily: 'sans-serif' };
 const formCardStyle: React.CSSProperties = { backgroundColor: '#fff', padding: '40px', borderRadius: '20px', boxShadow: '0 10px 25px rgba(0,0,0,0.05)', width: '100%', maxWidth: '400px', textAlign: 'center' };
 const titleStyle: React.CSSProperties = { fontSize: '1.5rem', color: '#333', marginBottom: '30px', fontWeight: 'bold' };

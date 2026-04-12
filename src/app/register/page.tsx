@@ -16,12 +16,12 @@ export default function RegisterPage() {
     e.preventDefault();
     setLoading(true);
     try {
-      // user_id カラムに値をインサートするニャ！
+      // 修正：password ではなく passcode カラムに保存するニャ！
       const { error } = await supabase
         .from('app_users')
         .insert([{ 
           user_id: loginId, 
-          password: password, 
+          passcode: password, // ここを修正
           p_name: pName 
         }]);
 
@@ -40,7 +40,6 @@ export default function RegisterPage() {
     <div style={containerStyle}>
       <div style={formCardStyle}>
         <h1 style={titleStyle}>巡ログ：新規登録 🐱</h1>
-        
         <form onSubmit={handleRegister} style={formStyle}>
           <div style={{ textAlign: 'left' }}>
             <label style={labelStyle}>ログインID</label>
@@ -53,7 +52,6 @@ export default function RegisterPage() {
               style={inputStyle}
             />
           </div>
-
           <div style={{ textAlign: 'left' }}>
             <label style={labelStyle}>パスワード</label>
             <input
@@ -65,7 +63,6 @@ export default function RegisterPage() {
               style={inputStyle}
             />
           </div>
-
           <div style={{ textAlign: 'left' }}>
             <label style={labelStyle}>ボカロP名 (表示用)</label>
             <input
@@ -77,24 +74,20 @@ export default function RegisterPage() {
               style={inputStyle}
             />
           </div>
-          
           <button type="submit" disabled={loading} style={regButtonStyle}>
             {loading ? '登録中ニャ...' : 'この内容で登録するニャ！'}
           </button>
         </form>
-        
         <p style={registerTextStyle}>
           もう登録してる？ 
-          <Link href="/login" style={registerLinkStyle}>
-            ログインはこちらニャ！
-          </Link>
+          <Link href="/login" style={registerLinkStyle}>ログインはこちらニャ！</Link>
         </p>
       </div>
     </div>
   );
 }
 
-// --- スタイル定義（ログイン画面と統一、ボタン色のみ青に） ---
+// --- スタイル定義（変更なし） ---
 const containerStyle: React.CSSProperties = { display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '100vh', backgroundColor: '#f9f9f9', fontFamily: 'sans-serif' };
 const formCardStyle: React.CSSProperties = { backgroundColor: '#fff', padding: '40px', borderRadius: '20px', boxShadow: '0 10px 25px rgba(0,0,0,0.05)', width: '100%', maxWidth: '400px', textAlign: 'center' };
 const titleStyle: React.CSSProperties = { fontSize: '1.5rem', color: '#333', marginBottom: '30px', fontWeight: 'bold' };
