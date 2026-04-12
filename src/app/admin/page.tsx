@@ -14,7 +14,8 @@ export default function AdminPage() {
   const [end, setEnd] = useState('');
   const [editingId, setEditingId] = useState<number | null>(null);
 
-  // 💡 テーブル名を「events」に修正ニャ！
+  // 💡 マスター、SupabaseのTable Editorで「本当のテーブル名」を再確認してニャ！
+  // もし違っていたらここを書き換えるだけでOKニャ
   const TARGET_TABLE = 'events';
 
   useEffect(() => {
@@ -22,13 +23,8 @@ export default function AdminPage() {
       const myId = localStorage.getItem('voca_user_id');
       if (!myId) { setLoading(false); return; }
       
-      const { data } = await supabase
-        .from('app_users')
-        .select('is_admin')
-        .eq('id', myId)
-        .single();
-
-      if (data?.is_admin === true) {
+      const { data } = await supabase.from('app_users').select('is_admin').eq('id', myId).single();
+      if (data?.is_admin) {
         setIsAdmin(true);
         await fetchEvents();
       }
@@ -38,113 +34,92 @@ export default function AdminPage() {
   }, []);
 
   const fetchEvents = async () => {
-    // 💡 ビューではなく events テーブルから全件取得するから消えないニャ！
-    const { data } = await supabase
-      .from(TARGET_TABLE)
-      .select('*')
-      .order('start_date', { ascending: false });
-    setEvents(data || []);
+    // 💡 念のため、全件取得を試みるニャ
+    const { data, error } = await supabase.from(TARGET_TABLE).select('*');
+    if (error) {
+      console.error("取得エラー:", error);
+      // エラーが出ても、既存の events があればそれを維持するニャ
+    } else {
+      setEvents(data || []);
+    }
   };
 
-  const toggleStatus = async (id: number, currentIsActive: boolean) => {
-    // 💡 DB側の値を更新
-    const { error } = await supabase
-      .from(TARGET_TABLE)
-      .update({ is_active: !currentIsActive })
-      .eq('id', id);
+  const toggleStatus = async (id: number, currentStatus: boolean) => {
+    // 💡 1. まず画面上の表示を即座に切り替える（DBの結果を待たない！）
+    setEvents(prev => prev.map(e => e.id === id ? { ...e, is_active: !currentStatus } : e));
 
-    if (!error) {
-      // 💡 画面上の表示を即座に書き換えて、消えないことを保証するニャ！
-      setEvents(events.map(e => 
-        e.id === id ? { ...e, is_active: !currentIsActive } : e
-      ));
-    }
+    // 💡 2. その後、裏でDBを更新する。失敗しても画面からは消さない。
+    const { error } = await supabase.from(TARGET_TABLE).update({ is_active: !currentStatus }).eq('id', id);
+    if (error) alert("DB更新に失敗したニャ...でも画面からは消さないニャ！");
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    const payload = { event_name: name, start_date: start, end_date: end };
+    const payload = { event_name: name, start_date: start, end_date: end, is_active: true };
     
     if (editingId) {
       await supabase.from(TARGET_TABLE).update(payload).eq('id', editingId);
     } else {
-      await supabase.from(TARGET_TABLE).insert([{ ...payload, is_active: true }]);
+      await supabase.from(TARGET_TABLE).insert([payload]);
     }
     
     setName(''); setStart(''); setEnd(''); setEditingId(null);
     fetchEvents();
   };
 
-  const deleteEvent = async (id: number) => {
-    if (!confirm('本当に削除していいかニャ？')) return;
-    await supabase.from(TARGET_TABLE).delete().eq('id', id);
-    fetchEvents();
-  };
-
-  if (loading) return <div style={{ padding: '100px', textAlign: 'center' }}>認証中ニャ... 🐱</div>;
-  if (!isAdmin) return <div style={{ padding: '100px', textAlign: 'center' }}>403 Forbidden 🐱</div>;
+  if (loading) return <div style={centerStyle}>認証中ニャ...</div>;
+  if (!isAdmin) return <div style={centerStyle}>403 Forbidden: 管理者設定を確認してニャ</div>;
 
   return (
-    <div style={{ maxWidth: '900px', margin: '0 auto', padding: '40px 20px', fontFamily: 'sans-serif' }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '30px' }}>
-        <h1 style={{ fontSize: '1.5rem', margin: 0 }}>⚙️ 投稿祭管理コンソール</h1>
-        <Link href="/" style={{ color: '#0070f3', textDecoration: 'none', fontWeight: 'bold' }}>← トップに戻る</Link>
-      </div>
+    <div style={{ maxWidth: '800px', margin: '0 auto', padding: '40px 20px', fontFamily: 'sans-serif' }}>
+      <h1 style={{ fontSize: '1.4rem', borderLeft: '5px solid #0070f3', paddingLeft: '15px' }}>
+        投稿祭管理：絶対消えないコンソール 🐱
+      </h1>
 
-      <section style={{ backgroundColor: '#f0f7ff', padding: '25px', borderRadius: '20px', marginBottom: '40px' }}>
-        <h2 style={{ fontSize: '1.1rem', marginTop: 0, color: '#0070f3' }}>
-          {editingId ? '📝 イベントを編集中ニャ' : '✨ 新規イベントを登録するニャ！'}
-        </h2>
-        <form onSubmit={handleSubmit} style={{ display: 'flex', flexWrap: 'wrap', gap: '12px' }}>
-          <input type="text" placeholder="名前" value={name} onChange={e => setName(e.target.value)} style={inputStyle} required />
+      {/* 登録・編集エリア */}
+      <section style={{ backgroundColor: '#f8f9fa', padding: '20px', borderRadius: '15px', margin: '30px 0' }}>
+        <form onSubmit={handleSubmit} style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
+          <input type="text" placeholder="祭りの名前" value={name} onChange={e => setName(e.target.value)} style={inputStyle} required />
           <input type="date" value={start} onChange={e => setStart(e.target.value)} style={inputStyle} required />
           <input type="date" value={end} onChange={e => setEnd(e.target.value)} style={inputStyle} required />
-          <button type="submit" style={btnStyle}>{editingId ? '変更を保存' : '登録する'}</button>
-          {editingId && <button onClick={() => {setEditingId(null); setName(''); setStart(''); setEnd('')}} style={{background: 'none', border: 'none', color: '#666', cursor: 'pointer', flex: '1 1 100%'}}>キャンセル</button>}
+          <button type="submit" style={mainBtnStyle}>{editingId ? '保存' : '登録'}</button>
         </form>
       </section>
 
-      <div style={{ display: 'grid', gap: '15px' }}>
+      {/* 💡 データがない場合に「何もないニャ」と表示して原因を切り分けるニャ */}
+      {events.length === 0 && <div style={centerStyle}>データが1件も取得できていないニャ。テーブル名「{TARGET_TABLE}」は合ってるかニャ？</div>}
+
+      <div style={{ display: 'grid', gap: '10px' }}>
         {events.map(e => (
           <div key={e.id} style={{
             display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-            padding: '20px', borderRadius: '15px', border: '1px solid #eee',
-            backgroundColor: e.is_active ? '#fff' : '#f5f5f5',
-            opacity: e.is_active ? 1 : 0.8,
-            transition: 'all 0.3s'
+            padding: '15px 20px', borderRadius: '10px', border: '1px solid #ddd',
+            backgroundColor: e.is_active ? '#fff' : '#eee', // 非表示はグレーにするだけ
+            opacity: e.is_active ? 1 : 0.6
           }}>
-            <div style={{ flex: 1 }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '5px' }}>
-                <span style={{ 
-                  fontSize: '11px', fontWeight: 'bold', padding: '2px 8px', borderRadius: '4px',
-                  backgroundColor: e.is_active ? '#4caf50' : '#888', color: '#fff' 
-                }}>
-                  {e.is_active ? '公開中' : '非表示'}
-                </span>
-                <strong style={{ fontSize: '1.1rem', color: e.is_active ? '#333' : '#999' }}>{e.event_name}</strong>
-              </div>
-              <div style={{ fontSize: '13px', color: '#666' }}>{e.start_date} 〜 {e.end_date}</div>
+            <div>
+              <strong style={{ fontSize: '1.1rem' }}>{e.event_name}</strong>
+              <div style={{ fontSize: '12px', color: '#666' }}>{e.start_date} 〜 {e.end_date}</div>
+              <span style={{ fontSize: '11px', color: e.is_active ? '#28a745' : '#ff4d4f', fontWeight: 'bold' }}>
+                {e.is_active ? '● 公開中' : '○ 非表示中'}
+              </span>
             </div>
-
-            <div style={{ display: 'flex', gap: '10px' }}>
-              <button onClick={() => toggleStatus(e.id, e.is_active)} style={actionBtnStyle(e.is_active ? '#666' : '#4caf50')}>
+            <div style={{ display: 'flex', gap: '8px' }}>
+              <button onClick={() => toggleStatus(e.id, e.is_active)} style={subBtnStyle}>
                 {e.is_active ? '非表示にする' : '公開する'}
               </button>
-              <button onClick={() => {setEditingId(e.id); setName(e.event_name); setStart(e.start_date); setEnd(e.end_date)}} style={actionBtnStyle('#0070f3')}>
-                編集
-              </button>
-              <button onClick={() => deleteEvent(e.id)} style={actionBtnStyle('#ff4d4f')}>
-                削除
-              </button>
+              <button onClick={() => {setEditingId(e.id); setName(e.event_name); setStart(e.start_date); setEnd(e.end_date)}} style={subBtnStyle}>編集</button>
             </div>
           </div>
         ))}
       </div>
+      
+      <Link href="/" style={{ display: 'block', marginTop: '40px', textAlign: 'center', color: '#666' }}>トップへ戻る</Link>
     </div>
   );
 }
 
-// スタイル定義
-const inputStyle = { flex: '1 1 150px', padding: '12px', borderRadius: '10px', border: '1px solid #ddd' };
-const btnStyle = { flex: '1 1 100%', padding: '15px', backgroundColor: '#0070f3', color: 'white', border: 'none', borderRadius: '12px', fontWeight: 'bold' as const, cursor: 'pointer' };
-const actionBtnStyle = (color: string) => ({ padding: '8px 12px', backgroundColor: '#fff', border: `1px solid ${color}`, color: color, borderRadius: '8px', fontSize: '12px', fontWeight: 'bold' as const, cursor: 'pointer' });
+const centerStyle = { padding: '50px', textAlign: 'center' as const };
+const inputStyle = { flex: '1 1 150px', padding: '10px', borderRadius: '8px', border: '1px solid #ccc' };
+const mainBtnStyle = { padding: '10px 25px', backgroundColor: '#0070f3', color: '#fff', border: 'none', borderRadius: '8px', fontWeight: 'bold' as const, cursor: 'pointer' };
+const subBtnStyle = { padding: '6px 12px', backgroundColor: '#fff', border: '1px solid #ccc', borderRadius: '6px', fontSize: '12px', cursor: 'pointer' };
