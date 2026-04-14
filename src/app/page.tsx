@@ -182,7 +182,7 @@ export default function HomePage() {
       }]);
 
       if (error) throw error;
-      alert('宣伝完了！✨');
+      alert('投稿完了！🐱');
       setSongTitle(''); setSongUrl(''); setRepostUrl(''); setComment('');
       await fetchAllPosts(); setActiveTab('list');
     } catch (error: any) { alert(error.message); } finally { setLoading(false); }
@@ -323,7 +323,7 @@ export default function HomePage() {
               <div style={{ flex: 1 }}><label style={labelStyle}>アイコン</label><input type="file" ref={iconRef} style={fileInputStyle} /></div>
             </div>
             
-            <button type="submit" disabled={loading} style={btnStyle('#0d6efd', true)}>{loading ? '送信中...' : '宣伝する！'}</button>
+            <button type="submit" disabled={loading} style={btnStyle('#0d6efd', true)}>{loading ? '送信中...' : '投稿する！'}</button>
           </form>
         </div>
       )}
