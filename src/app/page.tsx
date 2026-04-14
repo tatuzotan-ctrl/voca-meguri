@@ -207,8 +207,7 @@ export default function HomePage() {
     } catch (error: any) { alert(error.message); } finally { setLoading(false); }
   };
 
-  // 【BLOCK 5: 表示用コンポーネント (PostCard) - ⭐リデザイン版⭐】
-  // 💡 マスターのデザイン案（image_7e1694.png）に合わせて完全リニューアルニャ！
+// 【BLOCK 5: 表示用コンポーネント (PostCard) - ⭐完全再現版⭐】
   const PostCard = ({ post, isMyPage = false }: { post: any, isMyPage?: boolean }) => {
     const generateXUrl = () => {
       const text = `${post.song_title} / ${post.app_users?.p_name} さんを視聴したニャ！\n\n#巡ログ #ボカロ`;
@@ -221,66 +220,56 @@ export default function HomePage() {
 
     return (
       <div style={cardStyle}>
-        {/* 💡 横長レイアウト：左サムネ、右情報ニャ */}
-        <div style={{ display: 'flex', gap: '25px', alignItems: 'flex-start' }}>
-          
-          {/* 左側：サムネイル */}
+        {/* 上段：サムネと基本情報 */}
+        <div style={{ display: 'flex', gap: '20px', alignItems: 'flex-start', marginBottom: '15px' }}>
+          {/* 左：サムネイル */}
           <div style={{ flexShrink: 0 }}>
             <img src={post.thumbnail_url || DEFAULT_THUMB} style={thumbImgStyle} alt="thumb" />
           </div>
           
-          {/* 右側：情報セクションニャ */}
+          {/* 右：投稿祭・タイトル・P名 */}
           <div style={{ flex: 1, minWidth: 0 }}>
-            
-            {/* 上部：タグと削除ボタン */}
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
               <span style={tagStyle}>{post.events?.event_name || 'イベント名なし'}</span>
-              
-              {/* 💡 削除ボタンは右上に赤文字で配置ニャ */}
               {post.author_id === myId && (
-                <button onClick={() => { 
-                  if(confirm('この宣伝を削除する？')) 
-                    supabase.from('promotions').delete().eq('id', post.id).then(fetchAllPosts); 
-                }} style={deleteStyle}>
-                  削除
-                </button>
+                <button onClick={() => { if(confirm('削除する？')) supabase.from('promotions').delete().eq('id', post.id).then(fetchAllPosts); }} style={deleteStyle}>削除</button>
               )}
             </div>
-
-            {/* 中央：タイトルとP名 */}
-            <h3 style={titleStyle}>{post.song_title}</h3>
-            
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '12px' }}>
-              {/* 💡 アイコン画像を丸く表示ニャ */}
-              <img src={post.icon_url || DEFAULT_ICON} style={{ width: '24px', height: '24px', borderRadius: '50%', objectFit: 'cover' }} alt="icon" />
+            <h3 style={{ ...titleStyle, marginTop: '8px' }}>{post.song_title}</h3>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '4px' }}>
+              <img src={post.icon_url || DEFAULT_ICON} style={{ width: '24px', height: '24px', borderRadius: '50%', border: '1px solid #eee' }} alt="icon" />
               <span style={{ color: '#666', fontSize: '0.9rem', fontWeight: 'bold' }}>{post.app_users?.p_name}</span>
             </div>
-
-            {/* 下部：一言コメント（枠付き） */}
-            <p style={commentStyle}>{post.comment}</p>
-
-            {/* 💡 アクションボタン：横並びニャ */}
-            <div style={{ display: 'flex', gap: '15px', alignItems: 'center', marginTop: '15px', flexWrap: 'wrap' }}>
-              <a href={post.video_url} target="_blank" rel="noopener noreferrer" style={iconLinkStyle}>
-                📺 視聴
-              </a>
-              <a href={generateXUrl()} target="_blank" rel="noopener noreferrer" style={xBtnStyle}>
-                📢 引用RT
-              </a>
-              
-              {isMyPage ? (
-                // マイページ（マイリストタブ）のときは巡回ステータスニャ
-                <button onClick={() => toggleVisited(post.id.toString())} style={visitBtnStyle(isVisited)}>
-                  {isVisited ? '巡回済 ✅' : '未巡回 ⚪'}
-                </button>
-              ) : (
-                // 全員の作品タブのときはリスト追加ニャ
-                <button onClick={() => toggleCheck(post.id.toString())} style={checkBtnStyle(isChecked)}>
-                  {isChecked ? '💖 リスト済' : '🤍 リストに追加'}
-                </button>
-              )}
-            </div>
           </div>
+        </div>
+
+        {/* 中段：💡 デザイン案通りの「コメント枠」ニャ！ */}
+        <div style={{ 
+          border: '1px solid #333', 
+          padding: '12px', 
+          borderRadius: '4px', 
+          marginBottom: '15px',
+          minHeight: '50px',
+          fontSize: '0.9rem',
+          color: '#444',
+          lineHeight: '1.4'
+        }}>
+          {post.comment || '（コメントはありません）'}
+        </div>
+
+        {/* 下段：アクションボタン */}
+        <div style={{ display: 'flex', gap: '20px', alignItems: 'center', borderTop: '1px solid #f0f0f0', paddingTop: '10px' }}>
+          <a href={post.video_url} target="_blank" rel="noopener noreferrer" style={iconLinkStyle}>📺 視聴</a>
+          <a href={generateXUrl()} target="_blank" rel="noopener noreferrer" style={xBtnStyle}>📢 引用RT</a>
+          {isMyPage ? (
+            <button onClick={() => toggleVisited(post.id.toString())} style={visitBtnStyle(isVisited)}>
+              {isVisited ? '巡回済 ✅' : '未巡回 ⚪'}
+            </button>
+          ) : (
+            <button onClick={() => toggleCheck(post.id.toString())} style={checkBtnStyle(isChecked)}>
+              {isChecked ? '💖 リスト済' : '🤍 リストに追加'}
+            </button>
+          )}
         </div>
       </div>
     );
