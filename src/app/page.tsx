@@ -1,5 +1,6 @@
 'use client';
 
+// 【BLOCK 1: インポートと基本設定】
 import { useEffect, useState, useRef } from 'react';
 import { supabase } from '@/lib/supabase';
 import { useRouter } from 'next/navigation';
@@ -11,14 +12,14 @@ export default function HomePage() {
   const [pName, setPName] = useState('');
   
   const [allPosts, setAllPosts] = useState<any[]>([]);
-  const [myChecks, setMyChecks] = useState<string[]>([]); // mylistsに登録されているpromotion_id
-  const [visitedIds, setVisitedIds] = useState<string[]>([]); // patrol_statusでis_visited=trueのpromotion_id
+  const [myChecks, setMyChecks] = useState<string[]>([]); 
+  const [visitedIds, setVisitedIds] = useState<string[]>([]);
 
   const [eventList, setEventList] = useState<any[]>([]);
   const [selectedEventId, setSelectedEventId] = useState<string>(''); 
   const [isEventLoading, setIsEventLoading] = useState(true);
   
-  const [inputPName, setInputPName] = useState('');
+  const [inputPName, setInputPName] = useState(''); // 💡 ボカロP名（app_users.p_name用）
   const [songTitle, setSongTitle] = useState('');
   const [songUrl, setSongUrl] = useState('');
   const [repostUrl, setRepostUrl] = useState('');
@@ -32,6 +33,7 @@ export default function HomePage() {
   const DEFAULT_THUMB = '/images/listen-me.png'; 
   const DEFAULT_ICON = '/images/default-cat-p.png';
 
+  // 【BLOCK 2: 初期化処理 (useEffect)】
   useEffect(() => {
     const init = async () => {
       const uId = localStorage.getItem('voca_user_id');
@@ -45,9 +47,8 @@ export default function HomePage() {
       setIsLoggedIn(true);
       setMyId(uId);
       setPName(name || 'ボカロP');
-      setInputPName(name || '');
+      setInputPName(name || ''); // 💡 初期値としてP名をセット
 
-      // 全データ取得
       await Promise.all([
         fetchActiveEvents(),
         fetchAllPosts(),
@@ -57,9 +58,8 @@ export default function HomePage() {
     init();
   }, [router]);
 
-  // 💡 DBからマイリストと巡回ステータスを同期するニャ
+  // 【BLOCK 3: データ取得関数 (Fetch系)】
   const fetchUserStatus = async (userId: string) => {
-    // 1. まず mylists から自分の登録曲を全取得
     const { data: listData, error: listError } = await supabase
       .from('mylists')
       .select('id, promotion_id')
@@ -69,7 +69,6 @@ export default function HomePage() {
       const pIds = listData.map(d => d.promotion_id.toString());
       setMyChecks(pIds);
 
-      // 2. 作成された mylist_id を元に patrol_status から巡回済を抽出
       const mylistIds = listData.map(d => d.id);
       const { data: statusData, error: statusError } = await supabase
         .from('patrol_status')
@@ -78,7 +77,6 @@ export default function HomePage() {
         .in('mylist_id', mylistIds);
 
       if (!statusError && statusData) {
-        // ネストされた promotion_id をフラットな配列にするニャ
         const vIds = statusData
           .map((d: any) => d.mylists?.promotion_id?.toString())
           .filter(Boolean);
@@ -89,11 +87,13 @@ export default function HomePage() {
 
   const fetchActiveEvents = async () => {
     setIsEventLoading(true);
+    // 💡 修正：開始日が早い順にソートして取得
     const { data, error } = await supabase
       .from('events')
       .select('*')
       .eq('is_active', true)
-      .order('start_date', { ascending: true });
+      .order('start_date', { ascending: true }); 
+
     if (!error && data) {
       setEventList(data);
       if (data.length > 0) setSelectedEventId(data[0].id.toString());
@@ -109,6 +109,7 @@ export default function HomePage() {
     if (!error) setAllPosts(data || []);
   };
 
+  // 【BLOCK 4: アクション関数 (Toggle/Submit系)】
   const handleLogout = () => {
     localStorage.removeItem('voca_user_id');
     localStorage.removeItem('voca_p_name');
@@ -116,55 +117,35 @@ export default function HomePage() {
     router.push('/login');
   };
 
-  // 💡 マイリスト登録（mylists登録 + patrol_status初期化）
   const toggleCheck = async (postId: string) => {
     if (!myId) return;
     const isChecked = myChecks.includes(postId);
-    
     if (!isChecked) {
-      // 楽観的アップデート
       setMyChecks([...myChecks, postId]);
-
-      // 1. mylists に親レコードを作成
       const { data: newList, error: listError } = await supabase
         .from('mylists')
         .insert([{ user_id: myId, promotion_id: Number(postId) }])
-        .select()
-        .single();
+        .select().single();
 
       if (!listError && newList) {
-        // 2. 子レコードの patrol_status を作成
-        await supabase.from('patrol_status').insert([{
-          mylist_id: newList.id,
-          is_visited: false
-        }]);
+        await supabase.from('patrol_status').insert([{ mylist_id: newList.id, is_visited: false }]);
       }
     } else {
-      // 削除処理
       setMyChecks(myChecks.filter(id => id !== postId));
       setVisitedIds(prev => prev.filter(id => id !== postId));
-      
       await supabase.from('mylists').delete().eq('user_id', myId).eq('promotion_id', Number(postId));
-      // CASCADE設定により、子の patrol_status も自動で消えるニャ！
     }
   };
 
-  // 💡 巡回ステータス更新（patrol_statusの更新）
   const toggleVisited = async (postId: string) => {
     if (!myId) return;
     const isVisited = visitedIds.includes(postId);
-    
-    // UIを即座に更新
     const newVisited = isVisited ? visitedIds.filter(id => id !== postId) : [...visitedIds, postId];
     setVisitedIds(newVisited);
 
-    // 親の mylist_id を特定
     const { data: mylist } = await supabase
       .from('mylists')
-      .select('id')
-      .eq('user_id', myId)
-      .eq('promotion_id', Number(postId))
-      .single();
+      .select('id').eq('user_id', myId).eq('promotion_id', Number(postId)).single();
 
     if (mylist) {
       await supabase.from('patrol_status').upsert({
@@ -188,6 +169,7 @@ export default function HomePage() {
     if (!selectedEventId) { alert("イベントを選択してニャ！"); return; }
     setLoading(true);
     try {
+      // 💡 修正：P名が更新されている可能性があるので、必要ならDBのapp_usersを更新する処理も将来的に入れられるニャ
       let finalThumb = '';
       let finalIcon = '';
       if (thumbRef.current?.files?.[0]) finalThumb = await uploadImage(thumbRef.current.files[0], 'thumbnails');
@@ -206,22 +188,19 @@ export default function HomePage() {
     } catch (error: any) { alert(error.message); } finally { setLoading(false); }
   };
 
+  // 【BLOCK 5: 表示用コンポーネント (PostCard)】
   const PostCard = ({ post, isMyPage = false }: { post: any, isMyPage?: boolean }) => {
-    const generateXUrl = () => {
-      const text = `${post.song_title} / ${post.app_users?.p_name} さんを視聴したニャ！\n\n#巡ログ #ボカロ`;
-      const targetUrl = post.repost_url || post.video_url;
-      return `https://twitter.com/intent/tweet?text=${encodeURIComponent(text)}&url=${encodeURIComponent(targetUrl)}`;
-    };
-
     const isChecked = myChecks.includes(post.id.toString());
     const isVisited = visitedIds.includes(post.id.toString());
+    const generateXUrl = () => {
+      const text = `${post.song_title} / ${post.app_users?.p_name} さんを視聴したニャ！\n\n#巡ログ #ボカロ`;
+      return `https://twitter.com/intent/tweet?text=${encodeURIComponent(text)}&url=${encodeURIComponent(post.repost_url || post.video_url)}`;
+    };
 
     return (
       <div style={cardStyle}>
         <div style={{ display: 'flex', gap: '25px', alignItems: 'flex-start' }}>
-          <div style={{ flexShrink: 0 }}>
-            <img src={post.thumbnail_url || DEFAULT_THUMB} style={thumbImgStyle} alt="thumb" />
-          </div>
+          <img src={post.thumbnail_url || DEFAULT_THUMB} style={thumbImgStyle} alt="thumb" />
           <div style={{ flex: 1, minWidth: 0 }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
               <span style={tagStyle}>{post.events?.event_name || 'イベント名なし'}</span>
@@ -231,21 +210,17 @@ export default function HomePage() {
             </div>
             <h3 style={titleStyle}>{post.song_title}</h3>
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '12px' }}>
-              <img src={post.icon_url || DEFAULT_ICON} style={{ width: '24px', height: '24px', borderRadius: '50%', objectFit: 'cover' }} alt="icon" />
+              <img src={post.icon_url || DEFAULT_ICON} style={{ width: '24px', height: '24px', borderRadius: '50%' }} alt="icon" />
               <span style={{ color: '#666', fontSize: '0.9rem', fontWeight: 'bold' }}>{post.app_users?.p_name}</span>
             </div>
             <p style={commentStyle}>{post.comment}</p>
-            <div style={{ display: 'flex', gap: '15px', alignItems: 'center', marginTop: '15px', flexWrap: 'wrap' }}>
+            <div style={{ display: 'flex', gap: '15px', marginTop: '15px' }}>
               <a href={post.video_url} target="_blank" rel="noopener noreferrer" style={iconLinkStyle}>📺 視聴</a>
               <a href={generateXUrl()} target="_blank" rel="noopener noreferrer" style={xBtnStyle}>📢 引用RT</a>
               {isMyPage ? (
-                <button onClick={() => toggleVisited(post.id.toString())} style={visitBtnStyle(isVisited)}>
-                  {isVisited ? '巡回済 ✅' : '未巡回 ⚪'}
-                </button>
+                <button onClick={() => toggleVisited(post.id.toString())} style={visitBtnStyle(isVisited)}>{isVisited ? '巡回済 ✅' : '未巡回 ⚪'}</button>
               ) : (
-                <button onClick={() => toggleCheck(post.id.toString())} style={checkBtnStyle(isChecked)}>
-                  {isChecked ? '💖 リスト済' : '🤍 リストに追加'}
-                </button>
+                <button onClick={() => toggleCheck(post.id.toString())} style={checkBtnStyle(isChecked)}>{isChecked ? '💖 リスト済' : '🤍 リストに追加'}</button>
               )}
             </div>
           </div>
@@ -254,12 +229,13 @@ export default function HomePage() {
     );
   };
 
+  // 【BLOCK 6: メインレイアウト (Return)】
   return (
     <div style={{ maxWidth: '700px', margin: '0 auto', padding: '20px', backgroundColor: '#fff', minHeight: '100vh', fontFamily: 'sans-serif' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '30px' }}>
         <h1 style={{ color: '#0056b3', fontSize: '2.2rem', fontWeight: 'bold', margin: 0 }}>巡ログ <span style={{ fontSize: '1.2rem', fontWeight: 'normal' }}>β</span></h1>
         <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-          <div style={{ textAlign: 'right' }}><div style={{ fontSize: '1rem', color: '#333', fontWeight: 'bold' }}>{pName} さん</div></div>
+          <div style={{ fontSize: '1rem', color: '#333', fontWeight: 'bold' }}>{pName} さん</div>
           <button onClick={handleLogout} style={logoutBtnStyle}>ログアウト</button>
         </div>
       </div>
@@ -279,8 +255,8 @@ export default function HomePage() {
       {activeTab === 'mypage' && (
         <div style={{ display: 'grid', gap: '20px' }}>
           <div style={{ display: 'flex', gap: '12px', marginBottom: '10px' }}>
-            <div style={counterBoxStyle('#f8f9fa', '#666')}>登録数 <span style={{fontSize: '1.4rem', color: '#0056b3'}}>{myChecks.length}</span></div>
-            <div style={counterBoxStyle('#f0fff4', '#28a745')}>巡回済 <span style={{fontSize: '1.4rem'}}>{visitedIds.length}</span></div>
+            <div style={counterBoxStyle('#f8f9fa', '#666')}>登録数 <span style={{color: '#0056b3'}}>{myChecks.length}</span></div>
+            <div style={counterBoxStyle('#f0fff4', '#28a745')}>巡回済 {visitedIds.length}</div>
           </div>
           {allPosts.filter(p => myChecks.includes(p.id.toString())).map(post => <PostCard key={post.id} post={post} isMyPage={true} />)}
         </div>
@@ -290,19 +266,36 @@ export default function HomePage() {
         <div style={{ width: '100%', marginTop: '25px' }}>
           <h2 style={{ textAlign: 'center', marginBottom: '30px', fontSize: '1.2rem' }}>新曲を登録する 🚀</h2>
           <form onSubmit={handlePostSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '15px' }}>
+            
+            {/* 💡 修正：期間表示付きの昇順ソート済みプルダウン */}
+            <label style={labelStyle}>投稿祭を選択</label>
             <select value={selectedEventId} onChange={(e) => setSelectedEventId(e.target.value)} style={classicInput}>
               {isEventLoading ? <option>イベントをロード中...</option> : eventList.map((ev) => (
-                <option key={ev.id} value={ev.id}>{ev.event_name}</option>
+                <option key={ev.id} value={ev.id}>
+                  {ev.event_name} （{ev.start_date} 〜 {ev.end_date}）
+                </option>
               ))}
             </select>
+
+            <label style={labelStyle}>作品名</label>
             <input type="text" placeholder="曲のタイトル" value={songTitle} onChange={(e) => setSongTitle(e.target.value)} required style={classicInput} />
+            
+            {/* 💡 修正：ボカロP名入力欄 */}
+            <label style={labelStyle}>ボカロP名</label>
+            <input type="text" placeholder="ボカロP名" value={inputPName} onChange={(e) => setInputPName(e.target.value)} style={classicInput} />
+            
+            <label style={labelStyle}>URL情報</label>
             <input type="url" placeholder="動画URL" value={songUrl} onChange={(e) => setSongUrl(e.target.value)} required style={classicInput} />
             <input type="url" placeholder="リポストURL" value={repostUrl} onChange={(e) => setRepostUrl(e.target.value)} style={classicInput} />
+            
+            <label style={labelStyle}>コメント</label>
             <textarea placeholder="一言" value={comment} onChange={(e) => setComment(e.target.value)} style={{ ...classicInput, minHeight: '120px' }} />
+            
             <div style={{ display: 'flex', gap: '15px' }}>
               <div style={{ flex: 1 }}><label style={labelStyle}>サムネ</label><input type="file" ref={thumbRef} style={fileInputStyle} /></div>
               <div style={{ flex: 1 }}><label style={labelStyle}>アイコン</label><input type="file" ref={iconRef} style={fileInputStyle} /></div>
             </div>
+            
             <button type="submit" disabled={loading} style={btnStyle('#0d6efd', true)}>{loading ? '送信中...' : '宣伝する！'}</button>
           </form>
         </div>
@@ -312,7 +305,7 @@ export default function HomePage() {
   );
 }
 
-// --- スタイル定義 ---
+// --- スタイル定義 (省略せず維持) ---
 const counterBoxStyle = (bgColor: string, textColor: string) => ({ flex: 1, padding: '15px', borderRadius: '12px', backgroundColor: bgColor, color: textColor, textAlign: 'center' as const, fontSize: '0.9rem', fontWeight: 'bold' as const, border: '1px solid #eee' });
 const visitBtnStyle = (isVisited: boolean) => ({ background: isVisited ? '#e6fffa' : '#f8f9fa', border: isVisited ? '1px solid #38b2ac' : '1px solid #ddd', color: isVisited ? '#38b2ac' : '#666', borderRadius: '8px', padding: '6px 15px', cursor: 'pointer', fontWeight: 'bold' as const, fontSize: '0.9rem' });
 const navBtnStyle = (isActive: boolean) => ({ flex: 1, padding: '14px', borderRadius: '12px', border: '1px solid #ddd', cursor: 'pointer', backgroundColor: isActive ? '#0d6efd' : '#fff', color: isActive ? '#fff' : '#333', fontWeight: 'bold' as const });
