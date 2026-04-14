@@ -223,6 +223,7 @@ export default function HomePage() {
               <div style={counterBoxStyle('#f0fff4', '#28a745')}>巡回済 <span style={{fontSize: '1.4rem'}}>{visitedIds.length}</span></div>
             </div>
             {allPosts.filter(p => myChecks.includes(p.id.toString())).map(post => <PostCard key={post.id} post={post} isMyPage={true} />)}
+            <button type="submit" disabled={loading} style={btnStyle('#0d6efd', true)}>{loading ? '送信中...' : '宣伝する！'}</button>
           </div>
         )}
 
