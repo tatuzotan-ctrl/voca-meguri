@@ -175,7 +175,6 @@ export default function HomePage() {
             </div>
           </div>
         </div>
-        {/* デザイン案：コメント枠 */}
         <div style={{ border: '1px solid #333', padding: '12px', borderRadius: '4px', marginBottom: '15px', minHeight: '50px', fontSize: '0.9rem', color: '#444' }}>
           {post.comment || '（コメントはありません）'}
         </div>
@@ -194,7 +193,7 @@ export default function HomePage() {
 
   // 【BLOCK 6: メインレイアウト (Return)】
   return (
-    <div style={{ maxWidth: '700px', margin: '0 auto', padding: '20px', boxSizing: 'border-box' }}>
+    <div style={{ maxWidth: '740px', margin: '0 auto', padding: '20px', boxSizing: 'border-box', overflowX: 'hidden' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '30px' }}>
         <h1 style={{ color: '#0056b3', fontSize: '2.2rem', fontWeight: 'bold', margin: 0 }}>巡ログ <span style={{ fontSize: '1.2rem', fontWeight: 'normal' }}>β</span></h1>
         <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
@@ -209,15 +208,16 @@ export default function HomePage() {
         <button onClick={() => setActiveTab('post')} style={postAddBtnStyle(activeTab === 'post')}>＋ 作品を登録</button>
       </div>
 
-      <div style={{ width: '100%', boxSizing: 'border-box' }}>
+      {/* 💡 修正：カードの表示幅をフォームと完全に合わせるためのコンテナ */}
+      <div style={{ width: '100%', margin: '0 auto' }}>
         {activeTab === 'list' && (
-          <div style={{ display: 'grid', gap: '20px', marginTop: '25px' }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '20px', marginTop: '25px' }}>
             {allPosts.map(post => <PostCard key={post.id} post={post} />)}
           </div>
         )}
 
         {activeTab === 'mypage' && (
-          <div style={{ display: 'grid', gap: '20px' }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
             <div style={{ display: 'flex', gap: '12px', marginBottom: '10px' }}>
               <div style={counterBoxStyle('#f8f9fa', '#666')}>登録数 <span style={{fontSize: '1.4rem', color: '#0056b3'}}>{myChecks.length}</span></div>
               <div style={counterBoxStyle('#f0fff4', '#28a745')}>巡回済 <span style={{fontSize: '1.4rem'}}>{visitedIds.length}</span></div>
@@ -253,8 +253,8 @@ export default function HomePage() {
   );
 }
 
-// --- スタイル定義 (⭐幅を統一する修正ポイント⭐) ---
-const cardStyle = { width: '100%', border: '1px solid #eee', padding: '25px', borderRadius: '20px', backgroundColor: '#fff', marginBottom: '20px', boxShadow: '0 4px 12px rgba(0,0,0,0.03)', boxSizing: 'border-box' as const };
+// --- スタイル定義 ---
+const cardStyle = { width: '100%', border: '1px solid #eee', padding: '25px', borderRadius: '20px', backgroundColor: '#fff', boxShadow: '0 4px 12px rgba(0,0,0,0.03)', boxSizing: 'border-box' as const, margin: '0' };
 const counterBoxStyle = (bgColor: string, textColor: string) => ({ flex: 1, padding: '15px', borderRadius: '12px', backgroundColor: bgColor, color: textColor, textAlign: 'center' as const, fontSize: '0.9rem', fontWeight: 'bold' as const, border: '1px solid #eee' });
 const visitBtnStyle = (isVisited: boolean) => ({ background: isVisited ? '#e6fffa' : '#f8f9fa', border: isVisited ? '1px solid #38b2ac' : '1px solid #ddd', color: isVisited ? '#38b2ac' : '#666', borderRadius: '8px', padding: '6px 15px', cursor: 'pointer', fontWeight: 'bold' as const, fontSize: '0.9rem' });
 const navBtnStyle = (isActive: boolean) => ({ flex: 1, padding: '14px', borderRadius: '12px', border: '1px solid #ddd', cursor: 'pointer', backgroundColor: isActive ? '#0d6efd' : '#fff', color: isActive ? '#fff' : '#333', fontWeight: 'bold' as const });
