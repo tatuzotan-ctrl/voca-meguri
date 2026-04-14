@@ -12,8 +12,8 @@ export default function HomePage() {
   const [pName, setPName] = useState('');
   
   const [allPosts, setAllPosts] = useState<any[]>([]);
-  const [myChecks, setMyChecks] = useState<string[]>([]); // mylistsに登録されているpromotion_id
-  const [visitedIds, setVisitedIds] = useState<string[]>([]); // patrol_statusでis_visited=trueのpromotion_id
+  const [myChecks, setMyChecks] = useState<string[]>([]); 
+  const [visitedIds, setVisitedIds] = useState<string[]>([]);
 
   const [eventList, setEventList] = useState<any[]>([]);
   const [selectedEventId, setSelectedEventId] = useState<string>(''); 
@@ -30,7 +30,7 @@ export default function HomePage() {
   const thumbRef = useRef<HTMLInputElement>(null);
   const iconRef = useRef<HTMLInputElement>(null);
 
-  const DEFAULT_THUMB = '/images/listen-me.png'; // 💡 後でマスターが作った「聴いてね」画像に差し替えてニャ！
+  const DEFAULT_THUMB = '/images/listen-me.png'; 
   const DEFAULT_ICON = '/images/default-cat-p.png';
 
   // 【BLOCK 2: 初期化処理 (useEffect)】
@@ -38,40 +38,25 @@ export default function HomePage() {
     const init = async () => {
       const uId = localStorage.getItem('voca_user_id');
       const name = localStorage.getItem('voca_p_name');
-      
-      if (!uId) {
-        router.push('/login');
-        return;
-      }
-
+      if (!uId) { router.push('/login'); return; }
       setIsLoggedIn(true);
       setMyId(uId);
       setPName(name || 'ボカロP');
       setInputPName(name || '');
-
-      // 全データ取得
-      await Promise.all([
-        fetchActiveEvents(),
-        fetchAllPosts(),
-        fetchUserStatus(uId)
-      ]);
+      await Promise.all([fetchActiveEvents(), fetchAllPosts(), fetchUserStatus(uId)]);
     };
     init();
   }, [router]);
 
   // 【BLOCK 3: データ取得関数 (Fetch系)】
   const fetchUserStatus = async (userId: string) => {
-    // 1. まず mylists から自分の登録曲を全取得
     const { data: listData, error: listError } = await supabase
       .from('mylists')
       .select('id, promotion_id')
       .eq('user_id', userId);
 
     if (!listError && listData) {
-      const pIds = listData.map(d => d.promotion_id.toString());
-      setMyChecks(pIds);
-
-      // 2. 作成された mylist_id を元に patrol_status から巡回済を抽出
+      setMyChecks(listData.map(d => d.promotion_id.toString()));
       const mylistIds = listData.map(d => d.id);
       const { data: statusData, error: statusError } = await supabase
         .from('patrol_status')
@@ -80,24 +65,14 @@ export default function HomePage() {
         .in('mylist_id', mylistIds);
 
       if (!statusError && statusData) {
-        // ネストされた promotion_id をフラットな配列にするニャ
-        const vIds = statusData
-          .map((d: any) => d.mylists?.promotion_id?.toString())
-          .filter(Boolean);
-        setVisitedIds(vIds);
+        setVisitedIds(statusData.map((d: any) => d.mylists?.promotion_id?.toString()).filter(Boolean));
       }
     }
   };
 
   const fetchActiveEvents = async () => {
     setIsEventLoading(true);
-    // 💡 投稿祭を期間の昇順でソートして取得ニャ
-    const { data, error } = await supabase
-      .from('events')
-      .select('*')
-      .eq('is_active', true)
-      .order('start_date', { ascending: true }); 
-
+    const { data, error } = await supabase.from('events').select('*').eq('is_active', true).order('start_date', { ascending: true });
     if (!error && data) {
       setEventList(data);
       if (data.length > 0) setSelectedEventId(data[0].id.toString());
@@ -106,10 +81,7 @@ export default function HomePage() {
   };
 
   const fetchAllPosts = async () => {
-    const { data, error } = await supabase
-      .from('promotions')
-      .select('*, app_users ( p_name ), events!left ( event_name )')
-      .order('created_at', { ascending: false });
+    const { data, error } = await supabase.from('promotions').select('*, app_users ( p_name ), events!left ( event_name )').order('created_at', { ascending: false });
     if (!error) setAllPosts(data || []);
   };
 
@@ -124,25 +96,13 @@ export default function HomePage() {
   const toggleCheck = async (postId: string) => {
     if (!myId) return;
     const isChecked = myChecks.includes(postId);
-    
     if (!isChecked) {
-      // 1. mylists に親レコードを作成
-      const { data: newList, error: listError } = await supabase
-        .from('mylists')
-        .insert([{ user_id: myId, promotion_id: Number(postId) }])
-        .select()
-        .single();
-
+      const { data: newList, error: listError } = await supabase.from('mylists').insert([{ user_id: myId, promotion_id: Number(postId) }]).select().single();
       if (!listError && newList) {
-        // 2. 子レコードの patrol_status を作成（初期値は未巡回）
-        await supabase.from('patrol_status').insert([{
-          mylist_id: newList.id,
-          is_visited: false
-        }]);
-        setMyChecks([...myChecks, postId]); // UI更新
+        await supabase.from('patrol_status').insert([{ mylist_id: newList.id, is_visited: false }]);
+        setMyChecks([...myChecks, postId]);
       }
     } else {
-      // 削除処理
       setMyChecks(myChecks.filter(id => id !== postId));
       setVisitedIds(prev => prev.filter(id => id !== postId));
       await supabase.from('mylists').delete().eq('user_id', myId).eq('promotion_id', Number(postId));
@@ -152,25 +112,11 @@ export default function HomePage() {
   const toggleVisited = async (postId: string) => {
     if (!myId) return;
     const isVisited = visitedIds.includes(postId);
-    
-    // UIを即座に更新（楽観的アップデートニャ！）
     const newVisited = isVisited ? visitedIds.filter(id => id !== postId) : [...visitedIds, postId];
     setVisitedIds(newVisited);
-
-    // 親の mylist_id を特定
-    const { data: mylist } = await supabase
-      .from('mylists')
-      .select('id')
-      .eq('user_id', myId)
-      .eq('promotion_id', Number(postId))
-      .single();
-
+    const { data: mylist } = await supabase.from('mylists').select('id').eq('user_id', myId).eq('promotion_id', Number(postId)).single();
     if (mylist) {
-      // 子の patrol_status を更新（upsertで一意制約を利用）
-      await supabase.from('patrol_status').upsert({
-        mylist_id: mylist.id,
-        is_visited: !isVisited
-      }, { onConflict: 'mylist_id' });
+      await supabase.from('patrol_status').upsert({ mylist_id: mylist.id, is_visited: !isVisited }, { onConflict: 'mylist_id' });
     }
   };
 
@@ -192,42 +138,29 @@ export default function HomePage() {
       let finalIcon = '';
       if (thumbRef.current?.files?.[0]) finalThumb = await uploadImage(thumbRef.current.files[0], 'thumbnails');
       if (iconRef.current?.files?.[0]) finalIcon = await uploadImage(iconRef.current.files[0], 'icons');
-
-      const { error } = await supabase.from('promotions').insert([{ 
-        song_title: songTitle, video_url: songUrl, repost_url: repostUrl,
-        comment: comment, author_id: myId, thumbnail_url: finalThumb, icon_url: finalIcon,
-        event_id: Number(selectedEventId) 
-      }]);
-
+      const { error } = await supabase.from('promotions').insert([{ song_title: songTitle, video_url: songUrl, repost_url: repostUrl, comment: comment, author_id: myId, thumbnail_url: finalThumb, icon_url: finalIcon, event_id: Number(selectedEventId) }]);
       if (error) throw error;
       alert('宣伝完了！✨');
       setSongTitle(''); setSongUrl(''); setRepostUrl(''); setComment('');
-      await fetchAllPosts(); 
-      setActiveTab('list'); // 投稿したら全員の作品タブに戻るニャ
+      await fetchAllPosts(); setActiveTab('list');
     } catch (error: any) { alert(error.message); } finally { setLoading(false); }
   };
 
-// 【BLOCK 5: 表示用コンポーネント (PostCard) - ⭐完全再現版⭐】
+  // 【BLOCK 5: 表示用コンポーネント (PostCard)】
   const PostCard = ({ post, isMyPage = false }: { post: any, isMyPage?: boolean }) => {
     const generateXUrl = () => {
       const text = `${post.song_title} / ${post.app_users?.p_name} さんを視聴したニャ！\n\n#巡ログ #ボカロ`;
-      const targetUrl = post.repost_url || post.video_url;
-      return `https://twitter.com/intent/tweet?text=${encodeURIComponent(text)}&url=${encodeURIComponent(targetUrl)}`;
+      return `https://twitter.com/intent/tweet?text=${encodeURIComponent(text)}&url=${encodeURIComponent(post.repost_url || post.video_url)}`;
     };
-
     const isChecked = myChecks.includes(post.id.toString());
     const isVisited = visitedIds.includes(post.id.toString());
 
     return (
       <div style={cardStyle}>
-        {/* 上段：サムネと基本情報 */}
         <div style={{ display: 'flex', gap: '20px', alignItems: 'flex-start', marginBottom: '15px' }}>
-          {/* 左：サムネイル */}
           <div style={{ flexShrink: 0 }}>
             <img src={post.thumbnail_url || DEFAULT_THUMB} style={thumbImgStyle} alt="thumb" />
           </div>
-          
-          {/* 右：投稿祭・タイトル・P名 */}
           <div style={{ flex: 1, minWidth: 0 }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
               <span style={tagStyle}>{post.events?.event_name || 'イベント名なし'}</span>
@@ -242,33 +175,17 @@ export default function HomePage() {
             </div>
           </div>
         </div>
-
-        {/* 中段：💡 デザイン案通りの「コメント枠」ニャ！ */}
-        <div style={{ 
-          border: '1px solid #333', 
-          padding: '12px', 
-          borderRadius: '4px', 
-          marginBottom: '15px',
-          minHeight: '50px',
-          fontSize: '0.9rem',
-          color: '#444',
-          lineHeight: '1.4'
-        }}>
+        {/* デザイン案：コメント枠 */}
+        <div style={{ border: '1px solid #333', padding: '12px', borderRadius: '4px', marginBottom: '15px', minHeight: '50px', fontSize: '0.9rem', color: '#444' }}>
           {post.comment || '（コメントはありません）'}
         </div>
-
-        {/* 下段：アクションボタン */}
         <div style={{ display: 'flex', gap: '20px', alignItems: 'center', borderTop: '1px solid #f0f0f0', paddingTop: '10px' }}>
           <a href={post.video_url} target="_blank" rel="noopener noreferrer" style={iconLinkStyle}>📺 視聴</a>
           <a href={generateXUrl()} target="_blank" rel="noopener noreferrer" style={xBtnStyle}>📢 引用RT</a>
           {isMyPage ? (
-            <button onClick={() => toggleVisited(post.id.toString())} style={visitBtnStyle(isVisited)}>
-              {isVisited ? '巡回済 ✅' : '未巡回 ⚪'}
-            </button>
+            <button onClick={() => toggleVisited(post.id.toString())} style={visitBtnStyle(isVisited)}>{isVisited ? '巡回済 ✅' : '未巡回 ⚪'}</button>
           ) : (
-            <button onClick={() => toggleCheck(post.id.toString())} style={checkBtnStyle(isChecked)}>
-              {isChecked ? '💖 リスト済' : '🤍 リストに追加'}
-            </button>
+            <button onClick={() => toggleCheck(post.id.toString())} style={checkBtnStyle(isChecked)}>{isChecked ? '💖 リスト済' : '🤍 リストに追加'}</button>
           )}
         </div>
       </div>
@@ -277,109 +194,73 @@ export default function HomePage() {
 
   // 【BLOCK 6: メインレイアウト (Return)】
   return (
-    <div style={{ maxWidth: '700px', margin: '0 auto', padding: '20px', backgroundColor: '#fff', minHeight: '100vh', fontFamily: 'sans-serif' }}>
-      
-      {/* 💡 ヘッダー部分をスッキリニャ */}
+    <div style={{ maxWidth: '700px', margin: '0 auto', padding: '20px', boxSizing: 'border-box' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '30px' }}>
         <h1 style={{ color: '#0056b3', fontSize: '2.2rem', fontWeight: 'bold', margin: 0 }}>巡ログ <span style={{ fontSize: '1.2rem', fontWeight: 'normal' }}>β</span></h1>
-        
         <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-          <div style={{ textAlign: 'right' }}>
-            <div style={{ fontSize: '1rem', color: '#333', fontWeight: 'bold' }}>{pName} さん</div>
-          </div>
-          <button onClick={handleLogout} style={logoutBtnStyle}>
-            ログアウト
-          </button>
+          <div style={{ fontSize: '1rem', color: '#333', fontWeight: 'bold' }}>{pName} さん</div>
+          <button onClick={handleLogout} style={logoutBtnStyle}>ログアウト</button>
         </div>
       </div>
 
-      {/* 💡 タブナビゲーション：フラットなデザインにニャ */}
       <div style={{ display: 'flex', gap: '12px', marginBottom: '15px' }}>
         <button onClick={() => setActiveTab('list')} style={navBtnStyle(activeTab === 'list')}>全員の作品</button>
         <button onClick={() => setActiveTab('mypage')} style={navBtnStyle(activeTab === 'mypage')}>マイリスト</button>
         <button onClick={() => setActiveTab('post')} style={postAddBtnStyle(activeTab === 'post')}>＋ 作品を登録</button>
       </div>
 
-      {/* タブコンテンツ */}
-      {activeTab === 'list' && (
-        <div style={{ display: 'grid', gap: '20px', marginTop: '25px' }}>
-          {allPosts.map(post => <PostCard key={post.id} post={post} />)}
-        </div>
-      )}
-
-      {activeTab === 'mypage' && (
-        <div style={{ width: '100%', gap: '20px' }}>
-          {/* 💡 マイリスト情報を表示するカウンターパネルニャ */}
-          <div style={{ display: 'flex', gap: '12px', marginBottom: '10px' }}>
-            <div style={counterBoxStyle('#f8f9fa', '#666')}>登録数 <span style={{fontSize: '1.4rem', color: '#0056b3'}}>{myChecks.length}</span></div>
-            <div style={counterBoxStyle('#f0fff4', '#28a745')}>巡回済 <span style={{fontSize: '1.4rem'}}>{visitedIds.length}</span></div>
+      <div style={{ width: '100%', boxSizing: 'border-box' }}>
+        {activeTab === 'list' && (
+          <div style={{ display: 'grid', gap: '20px', marginTop: '25px' }}>
+            {allPosts.map(post => <PostCard key={post.id} post={post} />)}
           </div>
-          
-          {/* マイリストに登録した曲だけを表示ニャ（isMyPage=trueにして巡回ボタンに） */}
-          {allPosts.filter(p => myChecks.includes(p.id.toString())).map(post => <PostCard key={post.id} post={post} isMyPage={true} />)}
-        </div>
-      )}
+        )}
 
-      {activeTab === 'post' && (
-        <div style={{ width: '100%', marginTop: '25px' }}>
-          <h2 style={{ textAlign: 'center', marginBottom: '30px', fontSize: '1.2rem' }}>新曲を登録する 🚀</h2>
-          <form onSubmit={handlePostSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '15px' }}>
-            
-            {/* 💡 投稿祭選択：期間を表示できるように修正したニャ */}
-            <select value={selectedEventId} onChange={(e) => setSelectedEventId(e.target.value)} style={classicInput}>
-              {isEventLoading ? (
-                <option>イベントをロード中...</option>
-              ) : (
-                eventList.map((ev) => (
-                  <option key={ev.id} value={ev.id}>
-                    {ev.event_name} （{ev.start_date} 〜 {ev.end_date}）
-                  </option>
-                ))
-              )}
-            </select>
-
-            <input type="text" placeholder="曲のタイトル" value={songTitle} onChange={(e) => setSongTitle(e.target.value)} required style={classicInput} />
-            <input type="url" placeholder="動画URL" value={songUrl} onChange={(e) => setSongUrl(e.target.value)} required style={classicInput} />
-            <input type="url" placeholder="リポストURL（引用RTしてニャ）" value={repostUrl} onChange={(e) => setRepostUrl(e.target.value)} style={classicInput} />
-            
-            <textarea placeholder="一言（聞きどころなど）" value={comment} onChange={(e) => setComment(e.target.value)} style={{ ...classicInput, minHeight: '120px' }} />
-            
-            {/* 💡 サムネとアイコンのアップロードニャ */}
-            <div style={{ display: 'flex', gap: '15px' }}>
-              <div style={{ flex: 1 }}>
-                <label style={labelStyle}>サムネイル（推奨 16:9）</label>
-                <input type="file" ref={thumbRef} style={fileInputStyle} />
-              </div>
-              <div style={{ flex: 1 }}>
-                <label style={labelStyle}>アイコン</label>
-                <input type="file" ref={iconRef} style={fileInputStyle} />
-              </div>
+        {activeTab === 'mypage' && (
+          <div style={{ display: 'grid', gap: '20px' }}>
+            <div style={{ display: 'flex', gap: '12px', marginBottom: '10px' }}>
+              <div style={counterBoxStyle('#f8f9fa', '#666')}>登録数 <span style={{fontSize: '1.4rem', color: '#0056b3'}}>{myChecks.length}</span></div>
+              <div style={counterBoxStyle('#f0fff4', '#28a745')}>巡回済 <span style={{fontSize: '1.4rem'}}>{visitedIds.length}</span></div>
             </div>
-            
-            <button type="submit" disabled={loading} style={btnStyle('#0d6efd', true)}>
-              {loading ? '送信中ニャ...' : '宣伝する！'}
-            </button>
-          </form>
-        </div>
-      )}
-      
-      {/* 💡 フッターをひっそりとニャ */}
-      <div style={{ textAlign: 'center', marginTop: '60px', color: '#bbb', fontSize: '0.8rem' }}>
-        © 2026 巡ログ Project / Nekogaoka Gaburi
+            {allPosts.filter(p => myChecks.includes(p.id.toString())).map(post => <PostCard key={post.id} post={post} isMyPage={true} />)}
+          </div>
+        )}
+
+        {activeTab === 'post' && (
+          <div style={{ width: '100%', marginTop: '25px' }}>
+            <h2 style={{ textAlign: 'center', marginBottom: '30px', fontSize: '1.2rem' }}>新曲を登録する 🚀</h2>
+            <form onSubmit={handlePostSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '15px' }}>
+              <select value={selectedEventId} onChange={(e) => setSelectedEventId(e.target.value)} style={classicInput}>
+                {isEventLoading ? <option>ロード中...</option> : eventList.map((ev) => (
+                  <option key={ev.id} value={ev.id}>{ev.event_name} （{ev.start_date} 〜 {ev.end_date}）</option>
+                ))}
+              </select>
+              <input type="text" placeholder="曲のタイトル" value={songTitle} onChange={(e) => setSongTitle(e.target.value)} required style={classicInput} />
+              <input type="url" placeholder="動画URL" value={songUrl} onChange={(e) => setSongUrl(e.target.value)} required style={classicInput} />
+              <input type="url" placeholder="リポストURL" value={repostUrl} onChange={(e) => setRepostUrl(e.target.value)} style={classicInput} />
+              <textarea placeholder="一言" value={comment} onChange={(e) => setComment(e.target.value)} style={{ ...classicInput, minHeight: '120px' }} />
+              <div style={{ display: 'flex', gap: '15px' }}>
+                <div style={{ flex: 1 }}><label style={labelStyle}>サムネ</label><input type="file" ref={thumbRef} style={fileInputStyle} /></div>
+                <div style={{ flex: 1 }}><label style={labelStyle}>アイコン</label><input type="file" ref={iconRef} style={fileInputStyle} /></div>
+              </div>
+              <button type="submit" disabled={loading} style={btnStyle('#0d6efd', true)}>{loading ? '送信中...' : '宣伝する！'}</button>
+            </form>
+          </div>
+        )}
       </div>
+      <div style={{ textAlign: 'center', marginTop: '60px', color: '#bbb', fontSize: '0.8rem' }}>© 2026 巡ログ Project / Nekogaoka Gaburi</div>
     </div>
   );
 }
 
-// --- スタイル定義 (省略せず維持ニャ) ---
+// --- スタイル定義 (⭐幅を統一する修正ポイント⭐) ---
+const cardStyle = { width: '100%', border: '1px solid #eee', padding: '25px', borderRadius: '20px', backgroundColor: '#fff', marginBottom: '20px', boxShadow: '0 4px 12px rgba(0,0,0,0.03)', boxSizing: 'border-box' as const };
 const counterBoxStyle = (bgColor: string, textColor: string) => ({ flex: 1, padding: '15px', borderRadius: '12px', backgroundColor: bgColor, color: textColor, textAlign: 'center' as const, fontSize: '0.9rem', fontWeight: 'bold' as const, border: '1px solid #eee' });
 const visitBtnStyle = (isVisited: boolean) => ({ background: isVisited ? '#e6fffa' : '#f8f9fa', border: isVisited ? '1px solid #38b2ac' : '1px solid #ddd', color: isVisited ? '#38b2ac' : '#666', borderRadius: '8px', padding: '6px 15px', cursor: 'pointer', fontWeight: 'bold' as const, fontSize: '0.9rem' });
 const navBtnStyle = (isActive: boolean) => ({ flex: 1, padding: '14px', borderRadius: '12px', border: '1px solid #ddd', cursor: 'pointer', backgroundColor: isActive ? '#0d6efd' : '#fff', color: isActive ? '#fff' : '#333', fontWeight: 'bold' as const });
 const postAddBtnStyle = (isActive: boolean) => ({ flex: 1, padding: '14px', borderRadius: '12px', border: '1px solid #0d6efd', cursor: 'pointer', backgroundColor: '#fff', color: '#0d6efd', fontWeight: 'bold' as const });
-const cardStyle = { width: '100%', border: '1px solid #eee', padding: '25px', borderRadius: '20px', backgroundColor: '#fff', marginBottom: '20px', boxShadow: '0 4px 12px rgba(0,0,0,0.03)' };
 const thumbImgStyle = { width: '180px', height: '110px', objectFit: 'cover' as const, borderRadius: '12px', backgroundColor: '#f9f9f9' };
 const titleStyle = { fontSize: '1.25rem', margin: '5px 0', color: '#333', fontWeight: 'bold', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' as const };
-const commentStyle = { fontSize: '0.95rem', color: '#555', lineHeight: '1.5', margin: '0', display: '-webkit-box', WebkitLineClamp: '2', WebkitBoxOrient: 'vertical' as const, overflow: 'hidden' };
 const tagStyle = { backgroundColor: '#eef4ff', color: '#0d6efd', padding: '4px 12px', borderRadius: '6px', fontSize: '0.75rem', fontWeight: 'bold' };
 const iconLinkStyle = { textDecoration: 'none', color: '#333', fontWeight: 'bold', fontSize: '0.95rem', display: 'flex', alignItems: 'center', gap: '5px' };
 const checkBtnStyle = (isCheck: boolean) => ({ background: 'none', border: 'none', color: isCheck ? '#e91e63' : '#999', cursor: 'pointer', fontWeight: 'bold', fontSize: '0.95rem', display: 'flex', alignItems: 'center', gap: '5px' });
