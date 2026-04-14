@@ -308,7 +308,7 @@ export default function HomePage() {
       )}
 
       {activeTab === 'mypage' && (
-        <div style={{ display: 'grid', gap: '20px' }}>
+        <div style={{ width: '100%', gap: '20px' }}>
           {/* 💡 マイリスト情報を表示するカウンターパネルニャ */}
           <div style={{ display: 'flex', gap: '12px', marginBottom: '10px' }}>
             <div style={counterBoxStyle('#f8f9fa', '#666')}>登録数 <span style={{fontSize: '1.4rem', color: '#0056b3'}}>{myChecks.length}</span></div>
