@@ -268,7 +268,7 @@ export default function HomePage() {
       </div>
 
       <div style={{ display: 'flex', gap: '12px', marginBottom: '15px' }}>
-        <button onClick={() => setActiveTab('list')} style={navBtnStyle(activeTab === 'list')}>全員の作品</button>
+        <button onClick={() => setActiveTab('list')} style={navBtnStyle(activeTab === 'list')}>投稿作品</button>
         <button onClick={() => setActiveTab('mypage')} style={navBtnStyle(activeTab === 'mypage')}>マイリスト</button>
         <button onClick={() => setActiveTab('post')} style={postAddBtnStyle(activeTab === 'post')}>＋ 作品を登録</button>
       </div>
