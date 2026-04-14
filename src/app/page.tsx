@@ -291,7 +291,7 @@ export default function HomePage() {
 
       {activeTab === 'post' && (
         <div style={{ width: '100%', marginTop: '25px' }}>
-          <h2 style={{ textAlign: 'center', marginBottom: '30px', fontSize: '1.2rem' }}>新曲を登録する 🚀</h2>
+          {/* <h2 style={{ textAlign: 'center', marginBottom: '30px', fontSize: '1.2rem' }}>新曲を登録する 🚀</h2> */}
           <form onSubmit={handlePostSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '15px' }}>
             
             {/* 💡 修正：期間表示付きの昇順ソート済みプルダウン */}
