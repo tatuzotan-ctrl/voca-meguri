@@ -202,7 +202,7 @@ export default function HomePage() {
         </div>
       </div>
 
-      <div style={{ display: 'flex', gap: '12px', marginBottom: '15px' }}>
+      <div style={{ width: '100%', display: 'flex', gap: '12px', marginBottom: '15px' }}>
         <button onClick={() => setActiveTab('list')} style={navBtnStyle(activeTab === 'list')}>全員の作品</button>
         <button onClick={() => setActiveTab('mypage')} style={navBtnStyle(activeTab === 'mypage')}>マイリスト</button>
         <button onClick={() => setActiveTab('post')} style={postAddBtnStyle(activeTab === 'post')}>＋ 作品を登録</button>
@@ -221,7 +221,6 @@ export default function HomePage() {
             <div style={{ display: 'flex', gap: '12px', marginBottom: '10px' }}>
               <div style={counterBoxStyle('#f8f9fa', '#666')}>登録数 <span style={{fontSize: '1.4rem', color: '#0056b3'}}>{myChecks.length}</span></div>
               <div style={counterBoxStyle('#f0fff4', '#28a745')}>巡回済 <span style={{fontSize: '1.4rem'}}>{visitedIds.length}</span></div>
-              <button type="submit" disabled={loading} style={btnStyle('#0d6efd', true)}>{loading ? '送信中...' : '宣伝する！'}</button>
             </div>
             {allPosts.filter(p => myChecks.includes(p.id.toString())).map(post => <PostCard key={post.id} post={post} isMyPage={true} />)}
           </div>
